@@ -1,156 +1,152 @@
-import React, { useState } from 'react';
-import { Grid, Paper, Typography, Button, Card, CardContent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import MainLayout from '../components/layout/MainLayout';
+import React from 'react';
+import { Container, Grid, Paper, Typography, Button, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import PeopleIcon from '@mui/icons-material/People';
-import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [recentDrivers, setRecentDrivers] = useState([
-    {
-      id: 1,
-      name: 'John Smith',
-      vehicle: 'Toyota Camry',
-      status: 'Active',
-      rating: 4.8
-    },
-    // Add more sample drivers
-  ]);
 
   return (
-    <MainLayout>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={3}>
-        {/* Quick Actions */}
+        {/* Welcome Section */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PeopleIcon />}
-              onClick={() => navigate('/drivers')}
-            >
-              Manage Drivers
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PeopleIcon />}
-              onClick={() => navigate('/customers')}
-            >
-              Manage Customers
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<DirectionsCarIcon />}
-              onClick={() => navigate('/rides')}
-            >
-              View All Rides
-            </Button>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h4" gutterBottom>
+              Admin Dashboard
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              Manage your fleet, drivers, and system settings
+            </Typography>
           </Paper>
         </Grid>
 
-        {/* Quick Stats */}
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
+        {/* Fleet Management */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
             <Typography variant="h6" gutterBottom>
-              Total Drivers
+              Fleet Management
             </Typography>
-            <Typography variant="h4">45</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Total Customers
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Manage vehicles, maintenance, and fleet operations.
             </Typography>
-            <Typography variant="h4">1200</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Total Rides
-            </Typography>
-            <Typography variant="h4">3500</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Revenue
-            </Typography>
-            <Typography variant="h4">$25,000</Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => navigate('/fleet-management')}
+              >
+                Manage Fleet
+              </Button>
+            </Box>
           </Paper>
         </Grid>
 
-        {/* Recent Drivers */}
-        <Grid item xs={12}>
-          <Typography variant="h6" gutterBottom>
-            Recent Drivers
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Vehicle</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Rating</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {recentDrivers.map((driver) => (
-                  <TableRow key={driver.id}>
-                    <TableCell>{driver.id}</TableCell>
-                    <TableCell>{driver.name}</TableCell>
-                    <TableCell>{driver.vehicle}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        color={driver.status === 'Active' ? 'success' : 'error'}
-                      >
-                        {driver.status}
-                      </Button>
-                    </TableCell>
-                    <TableCell>{driver.rating}/5</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => navigate(`/drivers/${driver.id}`)}
-                      >
-                        View Details
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+        {/* Driver Management */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
+            <Typography variant="h6" gutterBottom>
+              Driver Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Manage drivers, their documents, and performance.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/driver-management')}
+              >
+                Manage Drivers
+              </Button>
+            </Box>
+          </Paper>
         </Grid>
 
-        {/* Revenue Chart */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
+        {/* Analytics */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
             <Typography variant="h6" gutterBottom>
-              Revenue Overview
+              Analytics
             </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<TrendingUpIcon />}
-              onClick={() => navigate('/revenue')}
-            >
-              View Detailed Report
-            </Button>
-            {/* Add chart component here */}
+            <Typography variant="body2" color="text.secondary" paragraph>
+              View system analytics and generate reports.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/analytics')}
+              >
+                View Analytics
+              </Button>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* System Settings */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
+            <Typography variant="h6" gutterBottom>
+              System Settings
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Configure system settings and manage users.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/system-settings')}
+              >
+                Manage Settings
+              </Button>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Customer Support */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
+            <Typography variant="h6" gutterBottom>
+              Customer Support
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Manage customer support tickets and queries.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/customer-support')}
+              >
+                View Support
+              </Button>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Payment Management */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
+            <Typography variant="h6" gutterBottom>
+              Payment Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Manage payments, invoices, and financial records.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/payment-management')}
+              >
+                Manage Payments
+              </Button>
+            </Box>
           </Paper>
         </Grid>
       </Grid>
-    </MainLayout>
+    </Container>
   );
 };
 

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { useSelector } from 'react-redux';
+import MainLayout from './components/layout/MainLayout';
 
 // Import pages
 import Login from './pages/Login';
@@ -38,7 +39,7 @@ const PrivateRoute = ({ children, roles }) => {
     return <Navigate to="/" />;
   }
 
-  return children;
+  return <MainLayout>{children}</MainLayout>;
 };
 
 function App() {
@@ -105,7 +106,7 @@ function App() {
             }
           />
 
-          {/* Common Routes */}
+          {/* Profile Route */}
           <Route
             path="/profile"
             element={

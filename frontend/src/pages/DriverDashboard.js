@@ -1,119 +1,110 @@
-import React, { useState } from 'react';
-import { Grid, Paper, Typography, Button, Card, CardContent, Chip } from '@mui/material';
-import MainLayout from '../components/layout/MainLayout';
+import React from 'react';
+import { Container, Grid, Paper, Typography, Button, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
-import PaymentIcon from '@mui/icons-material/Payment';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 const DriverDashboard = () => {
   const navigate = useNavigate();
-  const [activeRides, setActiveRides] = useState([
-    {
-      id: 1,
-      passenger: 'John Doe',
-      pickup: '123 Main St',
-      dropoff: '456 Market St',
-      fare: '$25.00',
-      status: 'In Progress'
-    },
-    // Add more sample rides
-  ]);
 
   return (
-    <MainLayout>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={3}>
-        {/* Quick Actions */}
+        {/* Welcome Section */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<DirectionsCarIcon />}
-              onClick={() => navigate('/active-rides')}
-            >
-              View Active Rides
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PaymentIcon />}
-              onClick={() => navigate('/earnings')}
-            >
-              View Earnings
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<AccessTimeIcon />}
-              onClick={() => navigate('/ride-history')}
-            >
-              Ride History
-            </Button>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h4" gutterBottom>
+              Driver Dashboard
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              Manage your rides, earnings, and schedule
+            </Typography>
           </Paper>
         </Grid>
 
-        {/* Active Rides */}
-        <Grid item xs={12}>
-          <Typography variant="h6" gutterBottom>
-            Active Rides
-          </Typography>
-          <Grid container spacing={2}>
-            {activeRides.map((ride) => (
-              <Grid item xs={12} sm={6} md={4} key={ride.id}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Ride #{ride.id}
-                    </Typography>
-                    <Typography color="textSecondary" gutterBottom>
-                      Passenger: {ride.passenger}
-                    </Typography>
-                    <Typography color="textSecondary" gutterBottom>
-                      From: {ride.pickup}
-                    </Typography>
-                    <Typography color="textSecondary" gutterBottom>
-                      To: {ride.dropoff}
-                    </Typography>
-                    <Typography variant="h6" color="primary">
-                      {ride.fare}
-                    </Typography>
-                    <Chip
-                      label={ride.status}
-                      color={ride.status === 'In Progress' ? 'primary' : 'default'}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+        {/* Current Ride */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
+            <Typography variant="h6" gutterBottom>
+              Current Ride
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              View and manage your current ride details.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => navigate('/current-ride')}
+              >
+                View Details
+              </Button>
+            </Box>
+          </Paper>
         </Grid>
 
-        {/* Quick Stats */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
+        {/* Earnings */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
             <Typography variant="h6" gutterBottom>
-              Today's Earnings
+              Earnings
             </Typography>
-            <Typography variant="h4">$150.00</Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Track your earnings and view payment history.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/driver-earnings')}
+              >
+                View Earnings
+              </Button>
+            </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
+
+        {/* Schedule */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
             <Typography variant="h6" gutterBottom>
-              Total Rides
+              Schedule
             </Typography>
-            <Typography variant="h4">45</Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Manage your working hours and availability.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/driver-schedule')}
+              >
+                Manage Schedule
+              </Button>
+            </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
+
+        {/* Ratings */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 200 }}>
             <Typography variant="h6" gutterBottom>
-              Rating
+              Ratings & Reviews
             </Typography>
-            <Typography variant="h4">4.9/5</Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              View your ratings and customer feedback.
+            </Typography>
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/driver-ratings')}
+              >
+                View Ratings
+              </Button>
+            </Box>
           </Paper>
         </Grid>
       </Grid>
-    </MainLayout>
+    </Container>
   );
 };
 
