@@ -20,10 +20,88 @@ import Profile from './pages/Profile';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
+      main: '#2196f3', // Modern blue
+      light: '#64b5f6',
+      dark: '#1976d2',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#f50057', // Vibrant pink
+      light: '#ff4081',
+      dark: '#c51162',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#2c3e50',
+      secondary: '#546e7a',
+    },
+  },
+  typography: {
+    fontFamily: "'Poppins', sans-serif",
+    h1: {
+      fontWeight: 600,
+      fontSize: '2.5rem',
+    },
+    h2: {
+      fontWeight: 600,
+      fontSize: '2rem',
+    },
+    h3: {
+      fontWeight: 600,
+      fontSize: '1.75rem',
+    },
+    h4: {
+      fontWeight: 600,
+      fontSize: '1.5rem',
+    },
+    h5: {
+      fontWeight: 600,
+      fontSize: '1.25rem',
+    },
+    h6: {
+      fontWeight: 600,
+      fontSize: '1rem',
+    },
+    button: {
+      textTransform: 'none',
+      fontWeight: 500,
+    },
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontSize: '1rem',
+        },
+        contained: {
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.05)',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.05)',
+          borderRadius: 16,
+        },
+      },
     },
   },
 });
