@@ -18,7 +18,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -42,12 +42,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    if token is None:
+        raise credentials_exception
+
     try:
+        # Print token for debugging
+        print(f"Decoding token: {token[:10]}...")
+
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-    except JWTError:
+
+        print(f"Token decoded, user_id: {user_id}")
+    except JWTError as e:
+        print(f"JWT Error: {str(e)}")
         raise credentials_exception
 
     # Import here to avoid circular imports
@@ -55,7 +65,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     user = db.query(DBUser).filter(DBUser.id == user_id).first()
     if user is None:
+        print(f"User not found for id: {user_id}")
         raise credentials_exception
+
+    print(f"User found: {user.email}")
     return user
 
 def get_current_active_user(current_user = Depends(get_current_user)):

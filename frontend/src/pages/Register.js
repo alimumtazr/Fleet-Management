@@ -58,8 +58,15 @@ const Register = () => {
         setLoading(true);
         try {
             const { confirmPassword, ...userData } = formData;
-            await authService.register(userData);
-            navigate('/dashboard');
+            const user = await authService.register(userData);
+            console.log("Registration successful:", user);
+
+            // Navigate based on user type
+            if (user && user.user && user.user.user_type === 'driver') {
+                navigate('/driver-dashboard');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
             setError(err.message || 'Registration failed. Please try again.');
         } finally {
@@ -178,4 +185,4 @@ const Register = () => {
     );
 };
 
-export default Register; 
+export default Register;

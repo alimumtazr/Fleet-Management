@@ -43,8 +43,15 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await authService.login(formData.email, formData.password);
-            navigate('/dashboard');
+            const user = await authService.login(formData.email, formData.password);
+            console.log("Login successful:", user);
+
+            // Navigate based on user type
+            if (user && user.user && user.user.user_type === 'driver') {
+                navigate('/driver-dashboard');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
             setError(err.message || 'Login failed. Please try again.');
         } finally {
@@ -108,4 +115,4 @@ const Login = () => {
     );
 };
 
-export default Login; 
+export default Login;
