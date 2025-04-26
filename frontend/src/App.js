@@ -17,6 +17,7 @@ import Payments from './pages/Payments';
 import Profile from './pages/Profile';
 
 // Create theme
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -36,7 +37,7 @@ const theme = createTheme({
     text: {
       primary: '#2c3e50',
       secondary: '#546e7a',
-    },
+    }, 
   },
   typography: {
     fontFamily: "'Poppins', sans-serif",
