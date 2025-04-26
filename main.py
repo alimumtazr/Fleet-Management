@@ -1,12 +1,13 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
-from models import User, Ride, Payment, Rating, UserType, RideStatus
+from typing import List
+from models import UserType, RideStatus, PaymentStatus
 from realtime_service import manager
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
+import datetime
 import uuid
-from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Enum as SQLEnum, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
@@ -20,14 +21,13 @@ from auth import (
     verify_password,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
+from fastapi.security import OAuth2PasswordRequestForm
 
 load_dotenv()
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:cassinispacecraft@localhost:5432/fms_data")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Database setup is now handled in database.py
+# We'll use the engine and SessionLocal from there
+from database import engine, SessionLocal, Base
 
 # Database models
 class DBUser(Base):
@@ -43,8 +43,10 @@ class DBUser(Base):
     current_location = Column(String, nullable=True)  # Store as JSON string
     rating = Column(Float, default=0.0)
     total_rides = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
+    password_hash = Column(String)
+    is_active = Column(Boolean, default=True)
 
 class DBRide(Base):
     __tablename__ = "rides"
@@ -58,7 +60,7 @@ class DBRide(Base):
     actual_price = Column(Float, nullable=True)
     distance = Column(Float)
     duration = Column(Integer)
-    requested_at = Column(DateTime, default=datetime.utcnow)
+    requested_at = Column(DateTime, default=datetime.datetime.now)
     accepted_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -75,7 +77,7 @@ class DBPayment(Base):
     status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING)
     payment_method = Column(String)
     transaction_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
     completed_at = Column(DateTime, nullable=True)
 
 class DBRating(Base):
@@ -86,7 +88,7 @@ class DBRating(Base):
     rated_to = Column(String, ForeignKey("users.id"))
     rating = Column(Float)
     comment = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -117,7 +119,7 @@ class UserCreate(BaseModel):
     first_name: str
     last_name: str
     phone_number: str
-    user_type: str
+    user_type: str  # Make sure this matches what frontend sends
 
 class UserLogin(BaseModel):
     email: str
@@ -137,47 +139,137 @@ class RideCreate(BaseModel):
 
 @app.post("/register", response_model=Token)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Check if user already exists
-    db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    db_user = DBUser(
-        email=user.email,
-        password_hash=hashed_password,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        phone=user.phone_number,
-        user_type=user.user_type
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    # Create access token
+    try:
+        # Check if user already exists
+        db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Create new user with UUID
+        user_id = str(uuid.uuid4())
+        hashed_password = get_password_hash(user.password)
+
+        # Fix: Make sure all required fields are provided and match the DB model
+        db_user = DBUser(
+            id=user_id,
+            email=user.email,
+            password_hash=hashed_password,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            phone=user.phone_number,
+            user_type=UserType(user.user_type),
+            is_active=True
+        )
+
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_id}, expires_delta=access_token_expires
+        )
+
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        db.rollback()  # Rollback transaction on error
+        print(f"Registration error: {str(e)}")  # Log the error
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+# Add API endpoint for frontend compatibility
+@app.post("/api/auth/signup", response_model=dict)
+async def signup(user: UserCreate, db: Session = Depends(get_db)):
+    try:
+        # Check if user already exists
+        db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Create new user with UUID
+        user_id = str(uuid.uuid4())
+        hashed_password = get_password_hash(user.password)
+
+        # Fix: Make sure all required fields are provided and match the DB model
+        db_user = DBUser(
+            id=user_id,
+            email=user.email,
+            password_hash=hashed_password,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            phone=user.phone_number,
+            user_type=UserType(user.user_type),
+            is_active=True
+        )
+
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_id}, expires_delta=access_token_expires
+        )
+
+        return {
+            "message": "User registered successfully",
+            "access_token": access_token,
+            "user": {
+                "id": user_id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "user_type": user.user_type
+            }
+        }
+    except Exception as e:
+        db.rollback()  # Rollback transaction on error
+        print(f"Registration error: {str(e)}")  # Log the error
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    db_user = db.query(DBUser).filter(DBUser.email == form_data.username).first()
+    if not db_user or not verify_password(form_data.password, db_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(db_user.id)}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.post("/login", response_model=Token)
-async def login(user: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
-    if not db_user or not verify_password(user.password, db_user.password_hash):
+# Add API endpoint for frontend compatibility
+@app.post("/api/auth/login", response_model=dict)
+async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(DBUser).filter(DBUser.email == user_login.email).first()
+    if not db_user or not verify_password(user_login.password, db_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(db_user.id)}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "message": "Login successful",
+        "access_token": access_token,
+        "user": {
+            "id": db_user.id,
+            "email": db_user.email,
+            "first_name": db_user.first_name,
+            "last_name": db_user.last_name,
+            "user_type": str(db_user.user_type.value)
+        }
+    }
 
 @app.get("/users/me", response_model=dict)
 async def read_users_me(current_user: DBUser = Depends(get_current_active_user)):
@@ -187,6 +279,18 @@ async def read_users_me(current_user: DBUser = Depends(get_current_active_user))
         "first_name": current_user.first_name,
         "last_name": current_user.last_name,
         "user_type": current_user.user_type,
+        "is_active": current_user.is_active
+    }
+
+# Add API endpoint for frontend compatibility
+@app.get("/api/auth/me", response_model=dict)
+async def get_current_user_api(current_user: DBUser = Depends(get_current_active_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "user_type": str(current_user.user_type.value),
         "is_active": current_user.is_active
     }
 
@@ -218,60 +322,89 @@ async def get_rides(
     rides = db.query(DBRide).filter(DBRide.rider_id == current_user.id).all()
     return [ride.__dict__ for ride in rides]
 
-@app.post("/users/", response_model=User)
-async def create_user(user: User, db: Session = Depends(get_db)):
-    db_user = DBUser(**user.dict())
+@app.post("/users/", response_model=dict)
+async def create_user(user: dict, db: Session = Depends(get_db)):
+    db_user = DBUser(**user)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return user
 
-@app.get("/users/{user_id}", response_model=User)
+@app.get("/users/{user_id}", response_model=dict)
 async def get_user(user_id: str, db: Session = Depends(get_db)):
     db_user = db.query(DBUser).filter(DBUser.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    return User.from_orm(db_user)
+    return {
+        "id": db_user.id,
+        "email": db_user.email,
+        "first_name": db_user.first_name,
+        "last_name": db_user.last_name,
+        "user_type": str(db_user.user_type.value),
+        "is_active": db_user.is_active
+    }
 
-@app.post("/rides/", response_model=Ride)
-async def create_ride(ride: Ride, db: Session = Depends(get_db)):
-    db_ride = DBRide(**ride.dict())
+@app.post("/rides/", response_model=dict)
+async def create_ride(ride: dict, db: Session = Depends(get_db)):
+    db_ride = DBRide(**ride)
     db.add(db_ride)
     db.commit()
     db.refresh(db_ride)
     return ride
 
-@app.get("/rides/{ride_id}", response_model=Ride)
+@app.get("/rides/{ride_id}", response_model=dict)
 async def get_ride(ride_id: str, db: Session = Depends(get_db)):
     db_ride = db.query(DBRide).filter(DBRide.id == ride_id).first()
     if not db_ride:
         raise HTTPException(status_code=404, detail="Ride not found")
-    return Ride.from_orm(db_ride)
+    return {
+        "id": db_ride.id,
+        "rider_id": db_ride.rider_id,
+        "driver_id": db_ride.driver_id,
+        "pickup_location": db_ride.pickup_location,
+        "dropoff_location": db_ride.dropoff_location,
+        "status": str(db_ride.status.value),
+        "estimated_price": db_ride.estimated_price,
+        "actual_price": db_ride.actual_price,
+        "distance": db_ride.distance,
+        "duration": db_ride.duration,
+        "requested_at": db_ride.requested_at.isoformat() if db_ride.requested_at else None,
+        "accepted_at": db_ride.accepted_at.isoformat() if db_ride.accepted_at else None,
+        "started_at": db_ride.started_at.isoformat() if db_ride.started_at else None,
+        "completed_at": db_ride.completed_at.isoformat() if db_ride.completed_at else None
+    }
 
 @app.put("/rides/{ride_id}/accept")
 async def accept_ride(ride_id: str, driver_id: str, db: Session = Depends(get_db)):
     db_ride = db.query(DBRide).filter(DBRide.id == ride_id).first()
     if not db_ride:
         raise HTTPException(status_code=404, detail="Ride not found")
-    
+
     db_driver = db.query(DBUser).filter(DBUser.id == driver_id).first()
     if not db_driver:
         raise HTTPException(status_code=404, detail="Driver not found")
-    
+
     db_ride.status = RideStatus.ACCEPTED
     db_ride.driver_id = driver_id
-    db_ride.accepted_at = datetime.utcnow()
+    db_ride.accepted_at = datetime.datetime.now()
     db.commit()
-    
+
     await manager.broadcast_ride_update(ride_id, {
         "type": "ride_accepted",
         "data": {
             "ride_id": ride_id,
             "driver_id": driver_id,
-            "driver_info": User.from_orm(db_driver).dict()
+            "driver_info": {
+                "id": db_driver.id,
+                "email": db_driver.email,
+                "first_name": db_driver.first_name,
+                "last_name": db_driver.last_name,
+                "user_type": str(db_driver.user_type.value),
+                "is_active": db_driver.is_active
+            }
         }
     })
-    
+
     return {"message": "Ride accepted successfully"}
 
 @app.put("/rides/{ride_id}/start")
@@ -279,11 +412,11 @@ async def start_ride(ride_id: str, db: Session = Depends(get_db)):
     db_ride = db.query(DBRide).filter(DBRide.id == ride_id).first()
     if not db_ride:
         raise HTTPException(status_code=404, detail="Ride not found")
-    
+
     db_ride.status = RideStatus.IN_PROGRESS
-    db_ride.started_at = datetime.utcnow()
+    db_ride.started_at = datetime.datetime.now()
     db.commit()
-    
+
     await manager.broadcast_ride_update(ride_id, {
         "type": "ride_started",
         "data": {
@@ -291,7 +424,7 @@ async def start_ride(ride_id: str, db: Session = Depends(get_db)):
             "started_at": db_ride.started_at.isoformat()
         }
     })
-    
+
     return {"message": "Ride started successfully"}
 
 @app.put("/rides/{ride_id}/complete")
@@ -299,11 +432,11 @@ async def complete_ride(ride_id: str, db: Session = Depends(get_db)):
     db_ride = db.query(DBRide).filter(DBRide.id == ride_id).first()
     if not db_ride:
         raise HTTPException(status_code=404, detail="Ride not found")
-    
+
     db_ride.status = RideStatus.COMPLETED
-    db_ride.completed_at = datetime.utcnow()
+    db_ride.completed_at = datetime.datetime.now()
     db.commit()
-    
+
     await manager.broadcast_ride_update(ride_id, {
         "type": "ride_completed",
         "data": {
@@ -311,7 +444,7 @@ async def complete_ride(ride_id: str, db: Session = Depends(get_db)):
             "completed_at": db_ride.completed_at.isoformat()
         }
     })
-    
+
     return {"message": "Ride completed successfully"}
 
 @app.websocket("/ws/{user_id}")
@@ -321,7 +454,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             if message["type"] == "driverLocation":
                 await manager.update_driver_location(user_id, message["location"])
             elif message["type"] == "rideRequest":
@@ -344,17 +477,17 @@ async def get_nearby_drivers(lat: float, lng: float, radius_km: float = 5.0):
     nearby_drivers = manager._get_nearby_drivers(location, radius_km)
     return {"drivers": nearby_drivers}
 
-@app.post("/payments/", response_model=Payment)
-async def create_payment(payment: Payment, db: Session = Depends(get_db)):
-    db_payment = DBPayment(**payment.dict())
+@app.post("/payments/", response_model=dict)
+async def create_payment(payment: dict, db: Session = Depends(get_db)):
+    db_payment = DBPayment(**payment)
     db.add(db_payment)
     db.commit()
     db.refresh(db_payment)
     return payment
 
-@app.post("/ratings/", response_model=Rating)
-async def create_rating(rating: Rating, db: Session = Depends(get_db)):
-    db_rating = DBRating(**rating.dict())
+@app.post("/ratings/", response_model=dict)
+async def create_rating(rating: dict, db: Session = Depends(get_db)):
+    db_rating = DBRating(**rating)
     db.add(db_rating)
     db.commit()
     db.refresh(db_rating)
@@ -362,4 +495,4 @@ async def create_rating(rating: Rating, db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

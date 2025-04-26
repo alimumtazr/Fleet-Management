@@ -1,3 +1,4 @@
+# NOTE: This file is not used for the main app. The main app uses Flask SQLAlchemy from backend/app/models/user.py.
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker

@@ -1,3 +1,4 @@
+# This is the ONLY User model to be used for all user-related logic. All other user models are deprecated.
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash, check_password_hash

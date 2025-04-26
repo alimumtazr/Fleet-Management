@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
-from datetime import datetime
+import datetime
 from passlib.context import CryptContext
 
 Base = declarative_base()
@@ -14,6 +14,18 @@ class UserType(enum.Enum):
     RIDER = "rider"
     DRIVER = "driver"
     ADMIN = "admin"
+
+class PaymentStatus(enum.Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class RideStatus(enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 class User(Base):
     __tablename__ = "users"
@@ -54,7 +66,7 @@ class Ride(Base):
     destination_longitude = Column(Float)
     status = Column(String)  # requested, accepted, in_progress, completed, cancelled
     fare = Column(Float)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
     completed_at = Column(DateTime, nullable=True)
 
     rider = relationship("User", back_populates="rides_as_rider", foreign_keys=[rider_id])
@@ -72,7 +84,7 @@ class Payment(Base):
     status = Column(String)  # pending, completed, failed
     payment_method = Column(String)
     transaction_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     ride = relationship("Ride", back_populates="payment")
     user = relationship("User", back_populates="payments")
@@ -85,7 +97,7 @@ class Rating(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     rating = Column(Integer)
     comment = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     ride = relationship("Ride", back_populates="ratings")
-    user = relationship("User", back_populates="ratings") 
+    user = relationship("User", back_populates="ratings")

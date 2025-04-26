@@ -1,3 +1,4 @@
+# DEPRECATED: Do not use this file for user models. Use backend/app/models/user.py for all user-related logic.
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
