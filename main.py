@@ -1,16 +1,25 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from models import User, Ride, Payment, Rating, UserType, RideStatus
 from realtime_service import manager
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from database import get_db, engine
+from auth import (
+    get_current_active_user,
+    create_access_token,
+    get_password_hash,
+    verify_password,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
 
 load_dotenv()
 
@@ -100,6 +109,114 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Pydantic models for request/response
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    phone_number: str
+    user_type: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class RideCreate(BaseModel):
+    pickup_location: str
+    dropoff_location: str
+    pickup_lat: float
+    pickup_lng: float
+    dropoff_lat: float
+    dropoff_lng: float
+
+@app.post("/register", response_model=Token)
+async def register(user: UserCreate, db: Session = Depends(get_db)):
+    # Check if user already exists
+    db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    db_user = DBUser(
+        email=user.email,
+        password_hash=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone_number,
+        user_type=user.user_type
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(db_user.id)}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/login", response_model=Token)
+async def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
+    if not db_user or not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(db_user.id)}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me", response_model=dict)
+async def read_users_me(current_user: DBUser = Depends(get_current_active_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "user_type": current_user.user_type,
+        "is_active": current_user.is_active
+    }
+
+@app.post("/rides", response_model=dict)
+async def create_ride(
+    ride: RideCreate,
+    current_user: DBUser = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    db_ride = DBRide(
+        rider_id=current_user.id,
+        pickup_location=ride.pickup_location,
+        dropoff_location=ride.dropoff_location,
+        pickup_lat=ride.pickup_lat,
+        pickup_lng=ride.pickup_lng,
+        dropoff_lat=ride.dropoff_lat,
+        dropoff_lng=ride.dropoff_lng
+    )
+    db.add(db_ride)
+    db.commit()
+    db.refresh(db_ride)
+    return db_ride.__dict__
+
+@app.get("/rides", response_model=List[dict])
+async def get_rides(
+    current_user: DBUser = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    rides = db.query(DBRide).filter(DBRide.rider_id == current_user.id).all()
+    return [ride.__dict__ for ride in rides]
 
 @app.post("/users/", response_model=User)
 async def create_user(user: User, db: Session = Depends(get_db)):
@@ -232,4 +349,8 @@ async def create_rating(rating: Rating, db: Session = Depends(get_db)):
     db.add(db_rating)
     db.commit()
     db.refresh(db_rating)
-    return rating 
+    return rating
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
