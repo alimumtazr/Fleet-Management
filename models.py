@@ -31,7 +31,8 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    rides = relationship("Ride", back_populates="user")
+    rides_as_rider = relationship("Ride", back_populates="rider", foreign_keys="Ride.rider_id")
+    rides_as_driver = relationship("Ride", back_populates="driver", foreign_keys="Ride.driver_id")
     payments = relationship("Payment", back_populates="user")
     ratings = relationship("Rating", back_populates="user")
 
@@ -45,53 +46,46 @@ class Ride(Base):
     __tablename__ = "rides"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rider_id = Column(Integer, ForeignKey("users.id"))
     driver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    pickup_location = Column(String, nullable=False)
-    dropoff_location = Column(String, nullable=False)
-    pickup_lat = Column(Float, nullable=False)
-    pickup_lng = Column(Float, nullable=False)
-    dropoff_lat = Column(Float, nullable=False)
-    dropoff_lng = Column(Float, nullable=False)
-    status = Column(String, default="pending")  # pending, accepted, in_progress, completed, cancelled
-    fare = Column(Float, nullable=True)
-    distance = Column(Float, nullable=True)
-    duration = Column(Float, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    pickup_latitude = Column(Float)
+    pickup_longitude = Column(Float)
+    destination_latitude = Column(Float)
+    destination_longitude = Column(Float)
+    status = Column(String)  # requested, accepted, in_progress, completed, cancelled
+    fare = Column(Float)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
 
-    # Relationships
-    user = relationship("User", foreign_keys=[user_id], back_populates="rides")
-    driver = relationship("User", foreign_keys=[driver_id])
+    rider = relationship("User", back_populates="rides_as_rider", foreign_keys=[rider_id])
+    driver = relationship("User", back_populates="rides_as_driver", foreign_keys=[driver_id])
     payment = relationship("Payment", back_populates="ride", uselist=False)
-    rating = relationship("Rating", back_populates="ride", uselist=False)
+    ratings = relationship("Rating", back_populates="ride")
 
 class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
-    amount = Column(Float, nullable=False)
-    payment_method = Column(String, nullable=False)  # cash, credit_card, mobile_wallet
-    status = Column(String, default="pending")  # pending, completed, failed
-    transaction_id = Column(String, unique=True, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    ride_id = Column(Integer, ForeignKey("rides.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    amount = Column(Float)
+    status = Column(String)  # pending, completed, failed
+    payment_method = Column(String)
+    transaction_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    # Relationships
-    user = relationship("User", back_populates="payments")
     ride = relationship("Ride", back_populates="payment")
+    user = relationship("User", back_populates="payments")
 
 class Rating(Base):
     __tablename__ = "ratings"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    ride_id = Column(Integer, ForeignKey("rides.id"), nullable=False)
-    rating = Column(Integer, nullable=False)  # 1-5
+    ride_id = Column(Integer, ForeignKey("rides.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    rating = Column(Integer)
     comment = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    # Relationships
-    user = relationship("User", back_populates="ratings")
-    ride = relationship("Ride", back_populates="rating") 
+    ride = relationship("Ride", back_populates="ratings")
+    user = relationship("User", back_populates="ratings") 

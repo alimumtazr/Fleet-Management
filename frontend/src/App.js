@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import RideBooking from './pages/RideBooking';
 import DriverDashboard from './pages/DriverDashboard';
 import authService from './services/authService';
+import { WebSocketProvider } from './context/WebSocketContext';
 
 const theme = createTheme({
     palette: {
@@ -49,28 +50,30 @@ const App = () => {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <Router>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route
-                        path="/"
-                        element={
-                            <ProtectedRoute>
-                                <RideBooking />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/driver-dashboard"
-                        element={
-                            <ProtectedRoute>
-                                <DriverDashboard />
-                            </ProtectedRoute>
-                        }
-                    />
-                </Routes>
-            </Router>
+            <WebSocketProvider>
+                <Router>
+                    <Routes>
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route
+                            path="/"
+                            element={
+                                <ProtectedRoute>
+                                    <RideBooking />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/driver-dashboard"
+                            element={
+                                <ProtectedRoute>
+                                    <DriverDashboard />
+                                </ProtectedRoute>
+                            }
+                        />
+                    </Routes>
+                </Router>
+            </WebSocketProvider>
         </ThemeProvider>
     );
 };

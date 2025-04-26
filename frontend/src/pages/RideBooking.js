@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { mapService } from '../services/mapService';
@@ -45,9 +45,12 @@ const RideBooking = () => {
 
     useEffect(() => {
         if (socket && isConnected) {
-            socket.on('driverUpdate', (data) => {
-                setNearbyDrivers(data.drivers);
-            });
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'driverUpdate') {
+                    setNearbyDrivers(data.drivers);
+                }
+            };
         }
     }, [socket, isConnected]);
 
@@ -87,11 +90,14 @@ const RideBooking = () => {
             
             // Notify nearby drivers about the ride request
             if (socket && isConnected) {
-                socket.emit('rideRequest', {
-                    pickup,
-                    destination,
-                    route: routeData
-                });
+                socket.send(JSON.stringify({
+                    type: 'rideRequest',
+                    data: {
+                        pickup,
+                        destination,
+                        route: routeData
+                    }
+                }));
             }
         } catch (error) {
             console.error('Error calculating route:', error);

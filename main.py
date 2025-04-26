@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from models import User, Ride, Payment, Rating, UserType, RideStatus
@@ -319,13 +319,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await manager.connect(websocket, user_id)
     try:
         while True:
-            data = await websocket.receive_json()
+            data = await websocket.receive_text()
+            message = json.loads(data)
             
-            if data["type"] == "location_update":
-                await manager.update_driver_location(user_id, data["location"])
-            elif data["type"] == "subscribe_ride":
-                await manager.subscribe_to_ride_updates(data["ride_id"], websocket)
-            
+            if message["type"] == "driverLocation":
+                await manager.update_driver_location(user_id, message["location"])
+            elif message["type"] == "rideRequest":
+                nearby_drivers = manager._get_nearby_drivers(message["pickup"])
+                await websocket.send_json({
+                    "type": "nearbyDrivers",
+                    "drivers": nearby_drivers
+                })
+            elif message["type"] == "rideStatus":
+                await manager.broadcast_ride_update(
+                    message["rideId"],
+                    {"type": "rideStatus", "status": message["status"]}
+                )
     except WebSocketDisconnect:
         manager.disconnect(user_id)
 
