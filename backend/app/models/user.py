@@ -1,16 +1,17 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash, check_password_hash
+import uuid
 
 db = SQLAlchemy()
 
 class User(db.Model):
     __tablename__ = 'users'
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'driver', 'customer'
+    role = db.Column(db.String(20), nullable=False, default='customer')  # 'admin', 'driver', 'customer'
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
     phone_number = db.Column(db.String(15), nullable=False)
@@ -26,7 +27,7 @@ class User(db.Model):
     rating = db.Column(db.Float, default=0.0)
     total_rides = db.Column(db.Integer, default=0)
 
-    def __init__(self, email, password, role, first_name, last_name, phone_number, **kwargs):
+    def __init__(self, email, password, role='customer', first_name=None, last_name=None, phone_number=None, **kwargs):
         self.email = email.lower()
         self.set_password(password)
         self.role = role
@@ -42,9 +43,13 @@ class User(db.Model):
             self.is_available = kwargs.get('is_available', True)
 
     def set_password(self, password):
+        if not password:
+            raise ValueError('Password cannot be empty')
         self.password_hash = generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
+        if not password:
+            return False
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
@@ -56,8 +61,8 @@ class User(db.Model):
             'last_name': self.last_name,
             'phone_number': self.phone_number,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
         if self.role == 'driver':

@@ -5,7 +5,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const authService = {
     login: async (email, password) => {
         try {
-            const response = await axios.post(`${API_URL}/login`, {
+            const response = await axios.post(`${API_URL}/api/auth/login`, {
                 email,
                 password
             });
@@ -14,18 +14,20 @@ const authService = {
             }
             return response.data;
         } catch (error) {
+            console.error('Login error:', error.response?.data || error);
             throw error.response?.data || { message: 'Login failed' };
         }
     },
 
     register: async (userData) => {
         try {
-            const response = await axios.post(`${API_URL}/register`, userData);
+            const response = await axios.post(`${API_URL}/api/auth/signup`, userData);
             if (response.data.access_token) {
                 localStorage.setItem('token', response.data.access_token);
             }
             return response.data;
         } catch (error) {
+            console.error('Registration error:', error.response?.data || error);
             throw error.response?.data || { message: 'Registration failed' };
         }
     },
@@ -39,11 +41,12 @@ const authService = {
             const token = localStorage.getItem('token');
             if (!token) return null;
 
-            const response = await axios.get(`${API_URL}/users/me`, {
+            const response = await axios.get(`${API_URL}/api/auth/me`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             return response.data;
         } catch (error) {
+            console.error('Get current user error:', error);
             localStorage.removeItem('token');
             return null;
         }

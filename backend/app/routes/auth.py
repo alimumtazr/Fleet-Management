@@ -2,58 +2,53 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.models.user import User, db
 from email_validator import validate_email, EmailNotValidError
+from datetime import timedelta
+import os
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
-    data = request.get_json()
-
-    # Validate required fields
-    required_fields = ['email', 'password', 'role', 'first_name', 'last_name', 'phone_number']
-    if not all(field in data for field in required_fields):
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    # Validate role
-    if data['role'] not in ['customer', 'driver']:
-        return jsonify({'error': 'Invalid role. Must be either customer or driver'}), 400
-
-    # Validate email format
     try:
-        valid = validate_email(data['email'])
-        email = valid.email
-    except EmailNotValidError as e:
-        return jsonify({'error': str(e)}), 400
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
 
-    # Check if user already exists
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': 'Email already registered'}), 409
+        # Validate required fields
+        required_fields = ['email', 'password', 'first_name', 'last_name', 'phone_number']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
 
-    # Additional validation for drivers
-    if data['role'] == 'driver':
-        if 'license_number' not in data:
-            return jsonify({'error': 'License number is required for drivers'}), 400
-        if 'vehicle_info' not in data:
-            return jsonify({'error': 'Vehicle information is required for drivers'}), 400
+        # Validate email format
+        try:
+            valid = validate_email(data['email'])
+            email = valid.email
+        except EmailNotValidError as e:
+            return jsonify({'error': str(e)}), 400
 
-    try:
+        # Check if user already exists
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'Email already registered'}), 409
+
         # Create new user
         user = User(
             email=email,
             password=data['password'],
-            role=data['role'],
+            role=data.get('user_type', 'customer'),
             first_name=data['first_name'],
             last_name=data['last_name'],
-            phone_number=data['phone_number'],
-            license_number=data.get('license_number'),
-            vehicle_info=data.get('vehicle_info')
+            phone_number=data['phone_number']
         )
         
         db.session.add(user)
         db.session.commit()
 
         # Create access token
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(
+            identity=user.id,
+            expires_delta=timedelta(days=1)
+        )
 
         return jsonify({
             'message': 'User registered successfully',
@@ -63,39 +58,59 @@ def signup():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to create user'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-
-    if not data or 'email' not in data or 'password' not in data:
-        return jsonify({'error': 'Missing email or password'}), 400
-
     try:
+        data = request.get_json()
+        if not data or 'email' not in data or 'password' not in data:
+            return jsonify({'error': 'Missing email or password'}), 400
+
         # Validate email format
-        valid = validate_email(data['email'])
-        email = valid.email
-    except EmailNotValidError as e:
-        return jsonify({'error': str(e)}), 400
+        try:
+            valid = validate_email(data['email'])
+            email = valid.email
+        except EmailNotValidError as e:
+            return jsonify({'error': str(e)}), 400
 
-    # Find user by email
-    user = User.query.filter_by(email=email).first()
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': 'Invalid email or password'}), 401
 
-    if not user or not user.check_password(data['password']):
-        return jsonify({'error': 'Invalid email or password'}), 401
+        if not user.check_password(data['password']):
+            return jsonify({'error': 'Invalid email or password'}), 401
 
-    if not user.is_active:
-        return jsonify({'error': 'Account is deactivated'}), 403
+        if not user.is_active:
+            return jsonify({'error': 'Account is deactivated'}), 403
 
-    # Create access token
-    access_token = create_access_token(identity=user.id)
+        # Create access token
+        access_token = create_access_token(
+            identity=user.id,
+            expires_delta=timedelta(days=1)
+        )
 
-    return jsonify({
-        'message': 'Login successful',
-        'access_token': access_token,
-        'user': user.to_dict()
-    }), 200
+        return jsonify({
+            'message': 'Login successful',
+            'access_token': access_token,
+            'user': user.to_dict()
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        return jsonify(user.to_dict()), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/profile', methods=['GET'])
 @jwt_required()
