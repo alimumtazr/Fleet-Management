@@ -17,6 +17,33 @@ axios.interceptors.request.use(
     }
 );
 
+// Add a response interceptor to handle token expiration
+axios.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    (error) => {
+        // Handle 401 Unauthorized errors (token expired or invalid)
+        if (error.response && error.response.status === 401) {
+            console.log('Received 401 Unauthorized response, clearing token');
+
+            // Don't clear token for login/register endpoints
+            const url = error.config.url;
+            if (!url.includes('/api/auth/login') && !url.includes('/api/auth/signup')) {
+                localStorage.removeItem('token');
+
+                // Redirect to login page if not already there
+                if (window.location.pathname !== '/login') {
+                    console.log('Redirecting to login page');
+                    window.location.href = '/login?session_expired=true';
+                }
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
 const authService = {
     login: async (email, password) => {
         try {
@@ -38,8 +65,33 @@ const authService = {
             return response.data;
         } catch (error) {
             console.error('Login error:', error);
-            console.error('Error details:', error.response?.data || error.message);
-            throw error.response?.data || { message: 'Login failed' };
+
+            // Extract the error message from the response
+            let errorMessage = 'Login failed';
+
+            if (error.response) {
+                console.error('Error response:', error.response);
+
+                // Handle FastAPI error format
+                if (error.response.data && error.response.data.detail) {
+                    errorMessage = error.response.data.detail;
+                }
+                // Handle our custom error format
+                else if (error.response.data && error.response.data.message) {
+                    errorMessage = error.response.data.message;
+                }
+                // If we have a status code, include it in the error
+                if (error.response.status) {
+                    console.error(`Error status: ${error.response.status}`);
+
+                    // Special handling for 401 Unauthorized
+                    if (error.response.status === 401) {
+                        errorMessage = 'Incorrect email or password';
+                    }
+                }
+            }
+
+            throw { message: errorMessage };
         }
     },
 
@@ -60,8 +112,28 @@ const authService = {
             return response.data;
         } catch (error) {
             console.error('Registration error:', error);
-            console.error('Error details:', error.response?.data || error.message);
-            throw error.response?.data || { message: 'Registration failed' };
+
+            // Extract the error message from the response
+            let errorMessage = 'Registration failed';
+
+            if (error.response) {
+                console.error('Error response:', error.response);
+
+                // Handle FastAPI error format
+                if (error.response.data && error.response.data.detail) {
+                    errorMessage = error.response.data.detail;
+                }
+                // Handle our custom error format
+                else if (error.response.data && error.response.data.message) {
+                    errorMessage = error.response.data.message;
+                }
+                // If we have a status code, include it in the error
+                if (error.response.status) {
+                    console.error(`Error status: ${error.response.status}`);
+                }
+            }
+
+            throw { message: errorMessage };
         }
     },
 
@@ -86,8 +158,24 @@ const authService = {
             return response.data;
         } catch (error) {
             console.error('Get current user error:', error);
-            console.error('Error details:', error.response?.data || error.message);
-            localStorage.removeItem('token');
+
+            // Log detailed error information
+            if (error.response) {
+                console.error('Error response:', error.response);
+                console.error('Error status:', error.response.status);
+                console.error('Error data:', error.response.data);
+            } else if (error.request) {
+                console.error('Error request:', error.request);
+            } else {
+                console.error('Error message:', error.message);
+            }
+
+            // If we get a 401 or 403, the token is invalid or expired
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+                console.log('Removing invalid token from localStorage');
+                localStorage.removeItem('token');
+            }
+
             return null;
         }
     },

@@ -50,8 +50,29 @@ const Register = () => {
         e.preventDefault();
         setError('');
 
+        // Client-side validation
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
+            return;
+        }
+
+        if (formData.password.length < 6) {
+            setError('Password must be at least 6 characters long');
+            return;
+        }
+
+        if (!formData.email || !formData.email.includes('@')) {
+            setError('Please enter a valid email address');
+            return;
+        }
+
+        if (!formData.first_name || !formData.last_name) {
+            setError('Please enter your first and last name');
+            return;
+        }
+
+        if (!formData.phone_number) {
+            setError('Please enter your phone number');
             return;
         }
 
@@ -68,7 +89,21 @@ const Register = () => {
                 navigate('/');
             }
         } catch (err) {
-            setError(err.message || 'Registration failed. Please try again.');
+            console.error('Registration error in component:', err);
+
+            // Format the error message for display
+            let errorMessage = 'Registration failed. Please try again.';
+
+            if (err.message) {
+                // Check for specific error messages
+                if (err.message.includes('Email already registered')) {
+                    errorMessage = 'This email is already registered. Please use a different email or try logging in.';
+                } else {
+                    errorMessage = `Registration failed: ${err.message}`;
+                }
+            }
+
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Container,
     Paper,
@@ -23,12 +23,33 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 
 const Login = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [formData, setFormData] = useState({
         email: '',
         password: '',
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Check for URL parameters
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+
+        // Handle session expired
+        if (searchParams.get('session_expired') === 'true') {
+            setError('Your session has expired. Please log in again.');
+        }
+
+        // Handle general authentication errors
+        if (searchParams.get('error') === 'true') {
+            setError('Authentication failed. Please log in again.');
+        }
+
+        // Clear the URL parameters after reading them
+        if (searchParams.toString()) {
+            navigate('/login', { replace: true });
+        }
+    }, [location, navigate]);
 
     const handleChange = (e) => {
         setFormData({
@@ -40,6 +61,18 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        // Client-side validation
+        if (!formData.email || !formData.email.includes('@')) {
+            setError('Please enter a valid email address');
+            return;
+        }
+
+        if (!formData.password) {
+            setError('Please enter your password');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -53,7 +86,21 @@ const Login = () => {
                 navigate('/');
             }
         } catch (err) {
-            setError(err.message || 'Login failed. Please try again.');
+            console.error('Login error in component:', err);
+
+            // Format the error message for display
+            let errorMessage = 'Login failed. Please try again.';
+
+            if (err.message) {
+                // Check for specific error messages
+                if (err.message.includes('Incorrect email or password')) {
+                    errorMessage = 'Incorrect email or password. Please try again.';
+                } else {
+                    errorMessage = `Login failed: ${err.message}`;
+                }
+            }
+
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

@@ -178,13 +178,16 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 # Add API endpoint for frontend compatibility
-@app.post("/api/auth/signup", response_model=dict)
+@app.post("/api/auth/signup")
 async def signup(user: UserCreate, db: Session = Depends(get_db)):
     try:
-        # Check if user already exists
+        # Check if user already exists - return a clean 400 error
         db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
         if db_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
 
         # Create new user with UUID
         user_id = str(uuid.uuid4())
@@ -202,17 +205,33 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
             is_active=True
         )
 
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+        try:
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+        except Exception as db_error:
+            db.rollback()
+            print(f"Database error during registration: {str(db_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database error during registration"
+            )
 
         # Create access token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user_id}, expires_delta=access_token_expires
-        )
+        try:
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": user_id}, expires_delta=access_token_expires
+            )
+        except Exception as token_error:
+            print(f"Token generation error: {str(token_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error generating authentication token"
+            )
 
         return {
+            "status": "success",
             "message": "User registered successfully",
             "access_token": access_token,
             "user": {
@@ -223,10 +242,16 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
                 "user_type": user.user_type
             }
         }
+    except HTTPException:
+        # Re-raise HTTP exceptions so they're handled properly
+        raise
     except Exception as e:
         db.rollback()  # Rollback transaction on error
-        print(f"Registration error: {str(e)}")  # Log the error
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        print(f"Unexpected registration error: {str(e)}")  # Log the error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed due to an unexpected error"
+        )
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -245,31 +270,59 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 # Add API endpoint for frontend compatibility
-@app.post("/api/auth/login", response_model=dict)
+@app.post("/api/auth/login")
 async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(DBUser).filter(DBUser.email == user_login.email).first()
-    if not db_user or not verify_password(user_login.password, db_user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    try:
+        # Check if user exists and password is correct
+        db_user = db.query(DBUser).filter(DBUser.email == user_login.email).first()
+        if not db_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(db_user.id)}, expires_delta=access_token_expires
-    )
-    return {
-        "message": "Login successful",
-        "access_token": access_token,
-        "user": {
-            "id": db_user.id,
-            "email": db_user.email,
-            "first_name": db_user.first_name,
-            "last_name": db_user.last_name,
-            "user_type": str(db_user.user_type.value)
+        if not verify_password(user_login.password, db_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Generate access token
+        try:
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": str(db_user.id)}, expires_delta=access_token_expires
+            )
+        except Exception as token_error:
+            print(f"Token generation error during login: {str(token_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error generating authentication token"
+            )
+
+        return {
+            "status": "success",
+            "message": "Login successful",
+            "access_token": access_token,
+            "user": {
+                "id": db_user.id,
+                "email": db_user.email,
+                "first_name": db_user.first_name,
+                "last_name": db_user.last_name,
+                "user_type": str(db_user.user_type.value)
+            }
         }
-    }
+    except HTTPException:
+        # Re-raise HTTP exceptions so they're handled properly
+        raise
+    except Exception as e:
+        print(f"Unexpected login error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed due to an unexpected error"
+        )
 
 @app.get("/users/me", response_model=dict)
 async def read_users_me(current_user: DBUser = Depends(get_current_active_user)):
@@ -283,16 +336,27 @@ async def read_users_me(current_user: DBUser = Depends(get_current_active_user))
     }
 
 # Add API endpoint for frontend compatibility
-@app.get("/api/auth/me", response_model=dict)
+@app.get("/api/auth/me")
 async def get_current_user_api(current_user: DBUser = Depends(get_current_active_user)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
-        "user_type": str(current_user.user_type.value),
-        "is_active": current_user.is_active
-    }
+    """
+    Get the current user's information.
+    This endpoint is used by the frontend to check if the user is logged in.
+    """
+    try:
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "user_type": str(current_user.user_type.value),
+            "is_active": current_user.is_active
+        }
+    except Exception as e:
+        print(f"Error in /api/auth/me endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving user information"
+        )
 
 @app.post("/rides", response_model=dict)
 async def create_ride(

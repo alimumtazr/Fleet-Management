@@ -23,13 +23,32 @@ const theme = createTheme({
 const ProtectedRoute = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const checkAuth = async () => {
             try {
+                // First check if we have a token
+                if (!authService.isAuthenticated()) {
+                    console.log('No token found, redirecting to login');
+                    setIsAuthenticated(false);
+                    setLoading(false);
+                    return;
+                }
+
+                // Then try to get the current user
                 const user = await authService.getCurrentUser();
-                setIsAuthenticated(!!user);
+
+                if (user) {
+                    console.log('User authenticated:', user);
+                    setIsAuthenticated(true);
+                } else {
+                    console.log('Failed to get user data, redirecting to login');
+                    setIsAuthenticated(false);
+                }
             } catch (error) {
+                console.error('Authentication error:', error);
+                setError(error);
                 setIsAuthenticated(false);
             } finally {
                 setLoading(false);
@@ -40,7 +59,22 @@ const ProtectedRoute = ({ children }) => {
     }, []);
 
     if (loading) {
-        return <div>Loading...</div>;
+        return (
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: '100vh',
+                flexDirection: 'column'
+            }}>
+                <div style={{ marginBottom: '20px' }}>Loading...</div>
+                <div>Verifying your authentication...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return <Navigate to="/login?error=true" />;
     }
 
     return isAuthenticated ? children : <Navigate to="/login" />;
@@ -78,4 +112,4 @@ const App = () => {
     );
 };
 
-export default App; 
+export default App;
