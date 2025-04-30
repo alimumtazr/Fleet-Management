@@ -1,12 +1,11 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 import datetime
 from passlib.context import CryptContext
+from database import Base
 
-Base = declarative_base()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class UserType(enum.Enum):

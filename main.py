@@ -1,15 +1,13 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
-from models import UserType, RideStatus, PaymentStatus
+from models import UserType, RideStatus, User as DBUser, Ride as DBRide, Payment as DBPayment, Rating as DBRating
 from realtime_service import manager
 import json
 from datetime import timedelta
 import datetime
 import uuid
-from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Enum as SQLEnum, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -21,74 +19,16 @@ from auth import (
     verify_password,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+
+# Add this line to create the OAuth2PasswordBearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 load_dotenv()
 
 # Database setup is now handled in database.py
 # We'll use the engine and SessionLocal from there
 from database import engine, SessionLocal, Base
-
-# Database models
-class DBUser(Base):
-    __tablename__ = "users"
-    id = Column(String, primary_key=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    email = Column(String, unique=True)
-    phone = Column(String)
-    user_type = Column(SQLEnum(UserType))
-    profile_picture = Column(String, nullable=True)
-    is_online = Column(Boolean, default=False)
-    current_location = Column(String, nullable=True)  # Store as JSON string
-    rating = Column(Float, default=0.0)
-    total_rides = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.datetime.now)
-    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
-    password_hash = Column(String)
-    is_active = Column(Boolean, default=True)
-
-class DBRide(Base):
-    __tablename__ = "rides"
-    id = Column(String, primary_key=True)
-    rider_id = Column(String, ForeignKey("users.id"))
-    driver_id = Column(String, ForeignKey("users.id"), nullable=True)
-    pickup_location = Column(String)  # Store as JSON string
-    dropoff_location = Column(String)  # Store as JSON string
-    status = Column(SQLEnum(RideStatus), default=RideStatus.PENDING)
-    estimated_price = Column(Float)
-    actual_price = Column(Float, nullable=True)
-    distance = Column(Float)
-    duration = Column(Integer)
-    requested_at = Column(DateTime, default=datetime.datetime.now)
-    accepted_at = Column(DateTime, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
-    cancellation_reason = Column(String, nullable=True)
-    driver_location_updates = Column(String, nullable=True)  # Store as JSON string
-    payment_id = Column(String, ForeignKey("payments.id"), nullable=True)
-
-class DBPayment(Base):
-    __tablename__ = "payments"
-    id = Column(String, primary_key=True)
-    ride_id = Column(String, ForeignKey("rides.id"))
-    amount = Column(Float)
-    status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING)
-    payment_method = Column(String)
-    transaction_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.now)
-    completed_at = Column(DateTime, nullable=True)
-
-class DBRating(Base):
-    __tablename__ = "ratings"
-    id = Column(String, primary_key=True)
-    ride_id = Column(String, ForeignKey("rides.id"))
-    rated_by = Column(String, ForeignKey("users.id"))
-    rated_to = Column(String, ForeignKey("users.id"))
-    rating = Column(Float)
-    comment = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.now)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -103,6 +43,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions with proper status codes and details."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": "error",
+            "code": exc.status_code,
+            "message": exc.detail,
+            "path": request.url.path
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle all other exceptions to prevent server crashes."""
+    # Log the error for server-side debugging
+    import traceback
+    error_details = traceback.format_exc()
+    print(f"Unhandled exception: {str(exc)}\n{error_details}")
+
+    # Return a user-friendly error response
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "status": "error",
+            "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "message": "An unexpected error occurred. Please try again later.",
+            "path": request.url.path
+        }
+    )
 
 # Dependency to get DB session
 def get_db():
@@ -234,6 +209,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
             "status": "success",
             "message": "User registered successfully",
             "access_token": access_token,
+            "token_type": "bearer",
             "user": {
                 "id": user_id,
                 "email": user.email,
@@ -306,6 +282,7 @@ async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
             "status": "success",
             "message": "Login successful",
             "access_token": access_token,
+            "token_type": "bearer",
             "user": {
                 "id": db_user.id,
                 "email": db_user.email,
@@ -324,7 +301,7 @@ async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
             detail="Login failed due to an unexpected error"
         )
 
-@app.get("/users/me", response_model=dict)
+@app.get("/users/me", response_model=None)
 async def read_users_me(current_user: DBUser = Depends(get_current_active_user)):
     return {
         "id": current_user.id,
@@ -343,6 +320,7 @@ async def get_current_user_api(current_user: DBUser = Depends(get_current_active
     This endpoint is used by the frontend to check if the user is logged in.
     """
     try:
+        # Return user information
         return {
             "id": current_user.id,
             "email": current_user.email,

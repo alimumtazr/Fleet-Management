@@ -4,9 +4,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 import bcrypt  # Import bcrypt directly for version check
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from database import SessionLocal
+from database import SessionLocal, get_db
 # Removed User import to avoid circular imports
 import os
 from dotenv import load_dotenv
@@ -22,11 +22,17 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 print(f"Using bcrypt version: {bcrypt.__version__}")
 
 # Use a more specific CryptContext configuration
+# Define security schemes
 pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto",
     bcrypt__rounds=12  # Adjust rounds for security/performance balance
 )
+
+# Use HTTPBearer for more flexible token handling
+security = HTTPBearer(auto_error=False)
+
+# Keep OAuth2PasswordBearer for compatibility
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -77,16 +83,34 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(SessionLocal)):
+async def get_current_user(
+    auth_credentials: HTTPAuthorizationCredentials = Depends(security),
+    token_oauth2: str = Depends(oauth2_scheme),
+    db: Session = Depends(SessionLocal)
+):
     """
     Validate the JWT token and return the current user.
     This function is used by the /api/auth/me endpoint.
+
+    It accepts tokens from either HTTPBearer or OAuth2PasswordBearer.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Get token from either HTTPBearer or OAuth2PasswordBearer
+    token = None
+
+    # Try to get token from HTTPBearer first
+    if auth_credentials:
+        token = auth_credentials.credentials
+        print("Using token from HTTPBearer")
+    # Then try OAuth2PasswordBearer
+    elif token_oauth2:
+        token = token_oauth2
+        print("Using token from OAuth2PasswordBearer")
 
     # If no token is provided, return 401 Unauthorized
     if token is None:
@@ -129,7 +153,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
 
     # Import here to avoid circular imports
-    from main import DBUser
+    from models import User as DBUser
 
     # Get the user from the database
     try:
@@ -147,22 +171,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             detail="Database error",
         )
 
-def get_current_active_user(current_user = Depends(get_current_user)):
+async def get_current_active_user(current_user: DBUser = Depends(get_current_user)):
     """
     Check if the current user is active.
-    This function is used by endpoints that require an active user.
+    This is a dependency that can be used by endpoints that require an active user.
     """
-    try:
-        if not current_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account is inactive"
-            )
-        return current_user
-    except AttributeError:
-        # This can happen if current_user is not a valid user object
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user

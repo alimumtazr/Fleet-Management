@@ -7,8 +7,16 @@ axios.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            // Make sure the token is properly formatted
+            const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+            config.headers.Authorization = formattedToken;
             console.log('Added token to request:', config.url);
+
+            // Add content type and accept headers for API requests
+            if (config.url.includes('/api/')) {
+                config.headers['Content-Type'] = 'application/json';
+                config.headers['Accept'] = 'application/json';
+            }
         }
         return config;
     },
@@ -57,13 +65,16 @@ const authService = {
 
             console.log('Login response:', response.data);
 
+            // Make sure we handle both token formats
             if (response.data.access_token) {
-                localStorage.setItem('token', response.data.access_token);
-                console.log('Token saved to localStorage');
+                const token = response.data.access_token;
+                localStorage.setItem('token', token);
+                console.log('Token saved to localStorage:', token.substring(0, 10) + '...');
             }
-
+            
             return response.data;
         } catch (error) {
+            // Error handling code remains the same
             console.error('Login error:', error);
 
             // Extract the error message from the response
@@ -105,8 +116,10 @@ const authService = {
             console.log('Registration response:', response.data);
 
             if (response.data.access_token) {
-                localStorage.setItem('token', response.data.access_token);
-                console.log('Token saved to localStorage');
+                // Store the token without the Bearer prefix
+                const token = response.data.access_token;
+                localStorage.setItem('token', token);
+                console.log('Token saved to localStorage:', token.substring(0, 10) + '...');
             }
 
             return response.data;
@@ -150,8 +163,16 @@ const authService = {
 
             console.log('API URL:', `${API_URL}/api/auth/me`);
 
+            // Make sure the token is properly formatted
+            const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+            console.log('Using formatted token:', formattedToken.substring(0, 20) + '...');
+
             const response = await axios.get(`${API_URL}/api/auth/me`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {
+                    'Authorization': formattedToken,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
             });
 
             console.log('Current user response:', response.data);
@@ -161,9 +182,16 @@ const authService = {
 
             // Log detailed error information
             if (error.response) {
-                console.error('Error response:', error.response);
-                console.error('Error status:', error.response.status);
-                console.error('Error data:', error.response.data);
+                console.error('Error response status:', error.response.status);
+                console.error('Error response data:', error.response.data);
+                console.error('Error response headers:', error.response.headers);
+
+                // Log the request that caused the error
+                if (error.config) {
+                    console.error('Request URL:', error.config.url);
+                    console.error('Request method:', error.config.method);
+                    console.error('Request headers:', error.config.headers);
+                }
             } else if (error.request) {
                 console.error('Error request:', error.request);
             } else {
@@ -171,7 +199,7 @@ const authService = {
             }
 
             // If we get a 401 or 403, the token is invalid or expired
-            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403 || error.response.status === 422)) {
                 console.log('Removing invalid token from localStorage');
                 localStorage.removeItem('token');
             }
@@ -186,7 +214,15 @@ const authService = {
 
     getAuthHeader: () => {
         const token = localStorage.getItem('token');
-        return token ? { Authorization: `Bearer ${token}` } : {};
+        if (!token) return {};
+
+        // Make sure the token is properly formatted
+        const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+        return {
+            'Authorization': formattedToken,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
     }
 };
 
