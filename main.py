@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from database import get_db, engine
 from auth import (
     get_current_active_user,
+    get_current_user,
     create_access_token,
     get_password_hash,
     verify_password,
@@ -329,7 +330,7 @@ async def read_users_me(current_user: DBUser = Depends(get_current_active_user))
 
 # Add API endpoint for frontend compatibility
 @app.get("/api/auth/me")
-async def get_current_user_api(current_user: DBUser = Depends(get_current_active_user)):
+async def get_current_user_api(current_user: DBUser = Depends(get_current_user)):
     """
     Get the current user's information.
     This endpoint is used by the frontend to check if the user is logged in.
@@ -352,6 +353,39 @@ async def get_current_user_api(current_user: DBUser = Depends(get_current_active
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error retrieving user information"
+        )
+
+# Add this route to redirect users based on their type
+@app.get("/api/auth/redirect")
+async def redirect_based_on_user_type(request: Request, db: Session = Depends(get_db)):
+    """
+    Redirect users to the appropriate dashboard based on their user type.
+    """
+    try:
+        # Get the current user using our updated function
+        current_user = await get_current_user(request, db)
+        
+        # Determine the redirect path based on user type
+        user_type = current_user.user_type.value if current_user.user_type else None
+        redirect_path = f"/{user_type.lower()}-dashboard" if user_type else "/login"
+        
+        return {
+            "status": "success",
+            "redirect": redirect_path,
+            "user_type": user_type
+        }
+    except HTTPException:
+        # If authentication fails, redirect to login
+        return {
+            "status": "error",
+            "redirect": "/login",
+            "message": "Authentication required"
+        }
+    except Exception as e:
+        print(f"Error in redirect endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error determining user redirect"
         )
 
 @app.post("/rides", response_model=dict)

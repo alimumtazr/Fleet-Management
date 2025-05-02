@@ -3,11 +3,10 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 import bcrypt  # Import bcrypt directly for version check
-from fastapi import Depends, HTTPException, status, Request  # Add Request
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from database import SessionLocal, get_db
-# Removed User import to avoid circular imports
+from database import get_db
 import os
 from dotenv import load_dotenv
 
@@ -22,15 +21,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 print(f"Using bcrypt version: {bcrypt.__version__}")
 
 # Use a more specific CryptContext configuration
-# Define security schemes
 pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto",
     bcrypt__rounds=12  # Adjust rounds for security/performance balance
 )
 
-# Use HTTPBearer for more flexible token handling
-security = HTTPBearer()
+# Use HTTPBearer for token handling
+security = HTTPBearer(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -84,42 +82,42 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 from models import User as DBUser
 
 async def get_current_user(
-    request: Request,  # Add request dependency
     auth_credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db) # Use get_db for consistency
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """
     Validate the JWT token and return the current user.
     This function is used by the /api/auth/me endpoint.
-
-    It accepts tokens from HTTPBearer.
     """
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, # Use 401 for unauthorized
+        status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Log the incoming Authorization header
-    auth_header = request.headers.get("Authorization")
-    print(f"Received Authorization header: {auth_header}")  # Log the raw header
-
+    # Try to get token from HTTPBearer first
     token = None
     if auth_credentials:
         token = auth_credentials.credentials
-        print(f"Token extracted by HTTPBearer: {token[:10]}...")  # Log extracted token
-
-    if token is None:
-        print("No token found in Authorization header or extracted by HTTPBearer")  # Updated log
+        print(f"Token from HTTPBearer: {token[:10]}..." if token else "No token from HTTPBearer")
+    
+    # If no token from HTTPBearer, try to get from request header directly
+    if not token and request:
+        auth_header = request.headers.get("Authorization")
+        print(f"Auth header from request: {auth_header}")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:]  # Remove 'Bearer ' prefix
+            print(f"Token from request header: {token[:10]}...")
+    
+    if not token:
+        print("No token found")
         raise credentials_exception
 
     try:
-        # Print token for debugging (only first few characters for security)
-        print(f"Decoding token from header: {token[:10]}...")
-
         # Decode the JWT token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
+        
         # Extract the user ID from the token
         user_id: str = payload.get("sub")
         if user_id is None:
@@ -127,29 +125,8 @@ async def get_current_user(
             raise credentials_exception
 
         print(f"Token decoded, user_id: {user_id}")
-
-        # Check token expiration
-        exp = payload.get("exp")
-        if exp is None:
-            print("Token does not contain expiration")
-            raise credentials_exception
-
-        # Convert exp to datetime for comparison
-        exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
-        if datetime.now(timezone.utc) >= exp_datetime:
-            print("Token has expired")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token expired",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-    except JWTError as e:
-        print(f"JWT Error: {str(e)}")
-        raise credentials_exception
-
-    # Get the user from the database
-    try:
+        
+        # Get the user from the database
         user = db.query(DBUser).filter(DBUser.id == user_id).first()
         if user is None:
             print(f"User not found for id: {user_id}")
@@ -157,11 +134,15 @@ async def get_current_user(
 
         print(f"User found: {user.email}")
         return user
+        
+    except JWTError as e:
+        print(f"JWT Error: {str(e)}")
+        raise credentials_exception
     except Exception as e:
-        print(f"Database error: {str(e)}")
+        print(f"Unexpected error in get_current_user: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error retrieving user",
+            detail=f"Error processing authentication: {str(e)}",
         )
 
 async def get_current_active_user(current_user: DBUser = Depends(get_current_user)):

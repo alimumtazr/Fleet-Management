@@ -59,6 +59,16 @@ axios.interceptors.response.use(
     }
 );
 
+// Helper function to get auth header - define this before using it
+const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return {};
+    
+    // Ensure token has 'Bearer ' prefix
+    const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    return { Authorization: formattedToken };
+};
+
 const authService = {
     login: async (email, password) => {
         try {
@@ -185,64 +195,28 @@ const authService = {
     getCurrentUser: async () => {
         try {
             const token = localStorage.getItem('token');
-            console.log('[GetCurrentUser] Attempting with token from localStorage:', token ? `${token.substring(0, 10)}...` : 'null'); // Log token retrieval
+            console.log('[GetCurrentUser] Token from localStorage:', token ? `${token.substring(0, 10)}...` : 'null');
 
             if (!token) {
                 console.log('[GetCurrentUser] No token found, returning null.');
                 return null;
             }
 
-            console.log('[GetCurrentUser] API URL:', `${API_URL}/api/auth/me`);
-
-            // The interceptor should handle the header, but we log for verification
-            const headers = {};
+            // Ensure token has Bearer prefix
             const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-            headers['Authorization'] = formattedToken;
-            headers['Content-Type'] = 'application/json';
-            headers['Accept'] = 'application/json';
-            console.log('[GetCurrentUser] Headers prepared (interceptor should override):', headers);
+            console.log('[GetCurrentUser] Formatted token:', formattedToken.substring(0, 20) + '...');
 
-            // Make the request - interceptor will add the header
-            const response = await axios.get(`${API_URL}/api/auth/me`);
-
-            console.log('[GetCurrentUser] Response status:', response.status);
-            console.log('[GetCurrentUser] Response data:', response.data);
-            
-            // Handle different response formats
-            // Some APIs return the user directly, others return { user: {...} }
-            const userData = response.data.user || response.data;
-            
-            if (!userData) {
-                console.error('No user data in response:', response.data);
-                return null;
-            }
-            
-            return userData;
-        } catch (error) {
-            console.error('[GetCurrentUser] Error fetching user:', error);
-
-            // Log detailed error information
-            if (error.response) {
-                console.error('Error response status:', error.response.status);
-                console.error('Error response data:', error.response.data);
-                
-                // Log the request that caused the error
-                if (error.config) {
-                    console.error('Request URL:', error.config.url);
-                    console.error('Request method:', error.config.method);
+            const response = await axios.get(`${API_URL}/api/auth/me`, { 
+                headers: {
+                    'Authorization': formattedToken,
+                    'Content-Type': 'application/json'
                 }
-            } else if (error.request) {
-                console.error('No response received:', error.request);
-            } else {
-                console.error('Error message:', error.message);
-            }
-
-            // If we get a 401 or 403, the token is invalid or expired
-            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-                console.log('Removing invalid token from localStorage');
-                localStorage.removeItem('token');
-            }
-
+            });
+            
+            console.log('[GetCurrentUser] Success:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('[GetCurrentUser] Error:', error.response ? error.response.data : error.message);
             return null;
         }
     },
@@ -251,18 +225,7 @@ const authService = {
         return !!localStorage.getItem('token');
     },
 
-    getAuthHeader: () => {
-        const token = localStorage.getItem('token');
-        if (!token) return {};
-
-        // Make sure the token is properly formatted
-        const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-        return {
-            'Authorization': formattedToken,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        };
-    }
+    getAuthHeader: getAuthHeader
 };
 
 export default authService;
