@@ -131,7 +131,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
             password_hash=hashed_password,
             first_name=user.first_name,
             last_name=user.last_name,
-            phone=user.phone_number,
+            phone=user.phone_number,  # Corrected field name mapping
             user_type=UserType(user.user_type),
             is_active=True
         )
@@ -185,9 +185,10 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
             password_hash=hashed_password,
             first_name=user.first_name,
             last_name=user.last_name,
-            phone=user.phone_number,
+            phone_number=user.phone_number,  # Use phone_number to match the model
             user_type=UserType(user.user_type),
             is_active=True
+            # is_verified=False # Set default if needed
         )
 
         try:

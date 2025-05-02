@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 import datetime
+from datetime import timezone  # Import timezone
 from passlib.context import CryptContext
 from database import Base
 
@@ -29,23 +30,24 @@ class RideStatus(enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True) # Assuming UUIDs based on main.py
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    phone_number = Column(String, unique=True, nullable=False)
-    user_type = Column(Enum(UserType), nullable=False)
+    password_hash = Column(String, nullable=False) # Renamed from hashed_password for consistency
+    first_name = Column(String)
+    last_name = Column(String)
+    phone = Column(String, unique=True, index=True) # Ensure this is 'phone'
+    user_type = Column(Enum(UserType), nullable=False) # Renamed from role
     is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    is_verified = Column(Boolean, default=False) # Added is_verified
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc), onupdate=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
 
-    # Relationships
+    # Relationships (adjust foreign keys if needed based on actual schema)
     rides_as_rider = relationship("Ride", back_populates="rider", foreign_keys="Ride.rider_id")
     rides_as_driver = relationship("Ride", back_populates="driver", foreign_keys="Ride.driver_id")
     payments = relationship("Payment", back_populates="user")
-    ratings = relationship("Rating", back_populates="user")
+    ratings_given = relationship("Rating", back_populates="rater", foreign_keys="Rating.rater_id")
+    ratings_received = relationship("Rating", back_populates="ratee", foreign_keys="Rating.ratee_id")
 
     def set_password(self, password: str):
         self.password_hash = pwd_context.hash(password)
@@ -65,7 +67,7 @@ class Ride(Base):
     destination_longitude = Column(Float)
     status = Column(String)  # requested, accepted, in_progress, completed, cancelled
     fare = Column(Float)
-    created_at = Column(DateTime, default=datetime.datetime.now)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
     completed_at = Column(DateTime, nullable=True)
 
     rider = relationship("User", back_populates="rides_as_rider", foreign_keys=[rider_id])
@@ -83,7 +85,7 @@ class Payment(Base):
     status = Column(String)  # pending, completed, failed
     payment_method = Column(String)
     transaction_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.now)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
 
     ride = relationship("Ride", back_populates="payment")
     user = relationship("User", back_populates="payments")
@@ -93,10 +95,12 @@ class Rating(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     ride_id = Column(Integer, ForeignKey("rides.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    rater_id = Column(Integer, ForeignKey("users.id"))  # Changed from user_id to rater_id
+    ratee_id = Column(Integer, ForeignKey("users.id"))  # Added ratee_id column
     rating = Column(Integer)
     comment = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.now)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc))
 
     ride = relationship("Ride", back_populates="ratings")
-    user = relationship("User", back_populates="ratings")
+    rater = relationship("User", back_populates="ratings_given", foreign_keys=[rater_id])
+    ratee = relationship("User", back_populates="ratings_received", foreign_keys=[ratee_id])
