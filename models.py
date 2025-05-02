@@ -35,10 +35,8 @@ class User(Base):
     password_hash = Column(String, nullable=False) # Renamed from hashed_password for consistency
     first_name = Column(String)
     last_name = Column(String)
-    phone = Column(String, unique=True, index=True) # Ensure this is 'phone'
     user_type = Column(Enum(UserType), nullable=False) # Renamed from role
     is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False) # Added is_verified
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
     updated_at = Column(DateTime, default=lambda: datetime.datetime.now(timezone.utc), onupdate=lambda: datetime.datetime.now(timezone.utc)) # Use timezone.utc
 

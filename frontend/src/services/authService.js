@@ -6,10 +6,12 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 axios.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
+        console.log('[Interceptor] Token from localStorage:', token ? `${token.substring(0, 10)}...` : 'null'); // Log token retrieval
         if (token) {
             // Make sure the token is properly formatted 
             const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
             config.headers.Authorization = formattedToken;
+            console.log('[Interceptor] Setting Authorization header for URL:', config.url, 'Header:', config.headers.Authorization ? `${config.headers.Authorization.substring(0, 20)}...` : 'Not set'); // Log header setting
             
             // Only log API calls, not every axios request
             if (config.url.includes('/api/')) {
@@ -25,7 +27,7 @@ axios.interceptors.request.use(
         return config;
     },
     (error) => {
-        console.error('Request interceptor error:', error);
+        console.error('[Interceptor] Request error:', error);
         return Promise.reject(error);
     }
 );
@@ -77,9 +79,9 @@ const authService = {
                 
                 // Always store the raw token without 'Bearer ' prefix
                 localStorage.setItem('token', token);
-                console.log('Token saved to localStorage:', token.substring(0, 10) + '...');
+                console.log('[Login] Token saved to localStorage:', token ? `${token.substring(0, 10)}...` : 'null'); // Log token saving
             } else {
-                console.error('No token in response:', response.data);
+                console.error('[Login] No token in response:', response.data);
             }
             
             return response.data;
@@ -183,25 +185,28 @@ const authService = {
     getCurrentUser: async () => {
         try {
             const token = localStorage.getItem('token');
-            console.log('Getting current user with token:', token ? 'Token exists' : 'No token');
+            console.log('[GetCurrentUser] Attempting with token from localStorage:', token ? `${token.substring(0, 10)}...` : 'null'); // Log token retrieval
 
-            if (!token) return null;
+            if (!token) {
+                console.log('[GetCurrentUser] No token found, returning null.');
+                return null;
+            }
 
-            console.log('API URL:', `${API_URL}/api/auth/me`);
+            console.log('[GetCurrentUser] API URL:', `${API_URL}/api/auth/me`);
 
-            // Make sure the token is properly formatted
+            // The interceptor should handle the header, but we log for verification
+            const headers = {};
             const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-            console.log('Using formatted token:', formattedToken.substring(0, 20) + '...');
+            headers['Authorization'] = formattedToken;
+            headers['Content-Type'] = 'application/json';
+            headers['Accept'] = 'application/json';
+            console.log('[GetCurrentUser] Headers prepared (interceptor should override):', headers);
 
-            const response = await axios.get(`${API_URL}/api/auth/me`, {
-                headers: {
-                    'Authorization': formattedToken,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-            });
+            // Make the request - interceptor will add the header
+            const response = await axios.get(`${API_URL}/api/auth/me`);
 
-            console.log('Current user response:', response.data);
+            console.log('[GetCurrentUser] Response status:', response.status);
+            console.log('[GetCurrentUser] Response data:', response.data);
             
             // Handle different response formats
             // Some APIs return the user directly, others return { user: {...} }
@@ -214,7 +219,7 @@ const authService = {
             
             return userData;
         } catch (error) {
-            console.error('Get current user error:', error);
+            console.error('[GetCurrentUser] Error fetching user:', error);
 
             // Log detailed error information
             if (error.response) {

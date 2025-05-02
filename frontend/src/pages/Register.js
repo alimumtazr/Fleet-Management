@@ -33,7 +33,6 @@ const Register = () => {
         confirmPassword: '',
         first_name: '',
         last_name: '',
-        phone_number: '',
         user_type: 'customer',
     });
     const [error, setError] = useState('');
@@ -71,18 +70,14 @@ const Register = () => {
             return;
         }
 
-        if (!formData.phone_number) {
-            setError('Please enter your phone number');
-            return;
-        }
-
         setLoading(true);
         try {
-            const { confirmPassword, ...userData } = formData;
+            const { confirmPassword, phone_number, ...userData } = formData;
             const user = await authService.register(userData);
             console.log("Registration successful:", user);
 
             // Navigate based on user type
+            // Fix: Access user_type from the nested user object in the response
             if (user && user.user && user.user.user_type === 'driver') {
                 navigate('/driver-dashboard');
             } else {
@@ -174,16 +169,6 @@ const Register = () => {
                         label="Last Name"
                         id="last_name"
                         value={formData.last_name}
-                        onChange={handleChange}
-                    />
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        name="phone_number"
-                        label="Phone Number"
-                        id="phone_number"
-                        value={formData.phone_number}
                         onChange={handleChange}
                     />
                     <FormControl fullWidth margin="normal">

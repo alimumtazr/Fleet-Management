@@ -76,14 +76,28 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const user = await authService.login(formData.email, formData.password);
-            console.log("Login successful:", user);
+            const loginResponse = await authService.login(formData.email, formData.password);
+            console.log("Login successful:", loginResponse);
 
-            // Navigate based on user type
-            if (user && user.user && user.user.user_type === 'driver') {
-                navigate('/driver-dashboard');
+            // Ensure user data is present in the response
+            if (loginResponse && loginResponse.user && loginResponse.user.user_type) {
+                const userType = loginResponse.user.user_type;
+                console.log("User type:", userType);
+
+                // Navigate based on user type
+                if (userType === 'driver') {
+                    navigate('/driver-dashboard');
+                } else if (userType === 'customer') { // Check for 'customer'
+                    navigate('/customer-dashboard'); // Redirect to customer dashboard
+                } else {
+                    // Default redirect if type is unknown or not customer/driver
+                    navigate('/'); 
+                }
             } else {
-                navigate('/');
+                console.error('User data or user_type missing in login response');
+                setError('Login succeeded but user data is incomplete. Please contact support.');
+                // Default redirect or stay on login?
+                navigate('/'); 
             }
         } catch (err) {
             console.error('Login error in component:', err);

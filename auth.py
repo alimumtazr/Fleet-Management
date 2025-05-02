@@ -3,8 +3,8 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 import bcrypt  # Import bcrypt directly for version check
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Request  # Add Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 # Removed User import to avoid circular imports
@@ -30,10 +30,7 @@ pwd_context = CryptContext(
 )
 
 # Use HTTPBearer for more flexible token handling
-security = HTTPBearer(auto_error=False)
-
-# Keep OAuth2PasswordBearer for compatibility
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -87,42 +84,38 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 from models import User as DBUser
 
 async def get_current_user(
+    request: Request,  # Add request dependency
     auth_credentials: HTTPAuthorizationCredentials = Depends(security),
-    token_oauth2: str = Depends(oauth2_scheme),
-    db: Session = Depends(SessionLocal)
+    db: Session = Depends(get_db) # Use get_db for consistency
 ):
     """
     Validate the JWT token and return the current user.
     This function is used by the /api/auth/me endpoint.
 
-    It accepts tokens from either HTTPBearer or OAuth2PasswordBearer.
+    It accepts tokens from HTTPBearer.
     """
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
+        status_code=status.HTTP_401_UNAUTHORIZED, # Use 401 for unauthorized
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Get token from either HTTPBearer or OAuth2PasswordBearer
-    token = None
+    # Log the incoming Authorization header
+    auth_header = request.headers.get("Authorization")
+    print(f"Received Authorization header: {auth_header}")  # Log the raw header
 
-    # Try to get token from HTTPBearer first
+    token = None
     if auth_credentials:
         token = auth_credentials.credentials
-        print("Using token from HTTPBearer")
-    # Then try OAuth2PasswordBearer
-    elif token_oauth2:
-        token = token_oauth2
-        print("Using token from OAuth2PasswordBearer")
+        print(f"Token extracted by HTTPBearer: {token[:10]}...")  # Log extracted token
 
-    # If no token is provided, return 401 Unauthorized
     if token is None:
-        print("No token provided")
+        print("No token found in Authorization header or extracted by HTTPBearer")  # Updated log
         raise credentials_exception
 
     try:
         # Print token for debugging (only first few characters for security)
-        print(f"Decoding token: {token[:10]}...")
+        print(f"Decoding token from header: {token[:10]}...")
 
         # Decode the JWT token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -168,7 +161,7 @@ async def get_current_user(
         print(f"Database error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
+            detail="Database error retrieving user",
         )
 
 async def get_current_active_user(current_user: DBUser = Depends(get_current_user)):
@@ -176,6 +169,6 @@ async def get_current_active_user(current_user: DBUser = Depends(get_current_use
     Check if the current user is active.
     This is a dependency that can be used by endpoints that require an active user.
     """
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     return current_user

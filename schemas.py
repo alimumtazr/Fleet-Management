@@ -4,9 +4,9 @@ from datetime import datetime
 
 class UserBase(BaseModel):
     email: EmailStr
-    full_name: str
-    phone_number: str
-    is_driver: bool = False
+    first_name: str  # Changed from full_name for consistency
+    last_name: str  # Added last_name
+    user_type: str  # Added user_type
 
 class UserCreate(UserBase):
     password: str
@@ -86,4 +86,4 @@ class LocationUpdate(BaseModel):
 
 class RideStatusUpdate(BaseModel):
     status: str
-    driver_id: Optional[int] = None 
+    driver_id: Optional[int] = None
