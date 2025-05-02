@@ -7,10 +7,14 @@ axios.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
         if (token) {
-            // Make sure the token is properly formatted
+            // Make sure the token is properly formatted 
             const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
             config.headers.Authorization = formattedToken;
-            console.log('Added token to request:', config.url);
+            
+            // Only log API calls, not every axios request
+            if (config.url.includes('/api/')) {
+                console.log('Adding token to API request:', config.url);
+            }
 
             // Add content type and accept headers for API requests
             if (config.url.includes('/api/')) {
@@ -21,6 +25,7 @@ axios.interceptors.request.use(
         return config;
     },
     (error) => {
+        console.error('Request interceptor error:', error);
         return Promise.reject(error);
     }
 );
@@ -55,7 +60,7 @@ axios.interceptors.response.use(
 const authService = {
     login: async (email, password) => {
         try {
-            console.log('Attempting login with:', { email, password });
+            console.log('Attempting login with:', { email, password: '******' });
             console.log('API URL:', `${API_URL}/api/auth/login`);
 
             const response = await axios.post(`${API_URL}/api/auth/login`, {
@@ -63,13 +68,18 @@ const authService = {
                 password
             });
 
-            console.log('Login response:', response.data);
+            console.log('Login response status:', response.status);
 
-            // Make sure we handle both token formats
-            if (response.data.access_token) {
-                const token = response.data.access_token;
+            // Standardize token storage regardless of how the backend sends it
+            if (response.data && (response.data.access_token || response.data.token)) {
+                // Get token from either format
+                const token = response.data.access_token || response.data.token;
+                
+                // Always store the raw token without 'Bearer ' prefix
                 localStorage.setItem('token', token);
                 console.log('Token saved to localStorage:', token.substring(0, 10) + '...');
+            } else {
+                console.error('No token in response:', response.data);
             }
             
             return response.data;
@@ -90,7 +100,10 @@ const authService = {
                 // Handle our custom error format
                 else if (error.response.data && error.response.data.message) {
                     errorMessage = error.response.data.message;
+                } else if (error.response.data && error.response.data.error) {
+                    errorMessage = error.response.data.error;
                 }
+                
                 // If we have a status code, include it in the error
                 if (error.response.status) {
                     console.error(`Error status: ${error.response.status}`);
@@ -113,13 +126,18 @@ const authService = {
 
             const response = await axios.post(`${API_URL}/api/auth/signup`, userData);
 
-            console.log('Registration response:', response.data);
+            console.log('Registration response status:', response.status);
 
-            if (response.data.access_token) {
-                // Store the token without the Bearer prefix
-                const token = response.data.access_token;
+            // Standardize token storage regardless of how the backend sends it
+            if (response.data && (response.data.access_token || response.data.token)) {
+                // Get token from either format
+                const token = response.data.access_token || response.data.token;
+                
+                // Always store the raw token without 'Bearer ' prefix
                 localStorage.setItem('token', token);
                 console.log('Token saved to localStorage:', token.substring(0, 10) + '...');
+            } else {
+                console.error('No token in response:', response.data);
             }
 
             return response.data;
@@ -139,10 +157,18 @@ const authService = {
                 // Handle our custom error format
                 else if (error.response.data && error.response.data.message) {
                     errorMessage = error.response.data.message;
+                } else if (error.response.data && error.response.data.error) {
+                    errorMessage = error.response.data.error;
                 }
+                
                 // If we have a status code, include it in the error
                 if (error.response.status) {
                     console.error(`Error status: ${error.response.status}`);
+                    
+                    // Special handling for 409 Conflict (email already exists)
+                    if (error.response.status === 409) {
+                        errorMessage = 'This email is already registered. Please use a different email or try logging in.';
+                    }
                 }
             }
 
@@ -176,7 +202,17 @@ const authService = {
             });
 
             console.log('Current user response:', response.data);
-            return response.data;
+            
+            // Handle different response formats
+            // Some APIs return the user directly, others return { user: {...} }
+            const userData = response.data.user || response.data;
+            
+            if (!userData) {
+                console.error('No user data in response:', response.data);
+                return null;
+            }
+            
+            return userData;
         } catch (error) {
             console.error('Get current user error:', error);
 
@@ -184,22 +220,20 @@ const authService = {
             if (error.response) {
                 console.error('Error response status:', error.response.status);
                 console.error('Error response data:', error.response.data);
-                console.error('Error response headers:', error.response.headers);
-
+                
                 // Log the request that caused the error
                 if (error.config) {
                     console.error('Request URL:', error.config.url);
                     console.error('Request method:', error.config.method);
-                    console.error('Request headers:', error.config.headers);
                 }
             } else if (error.request) {
-                console.error('Error request:', error.request);
+                console.error('No response received:', error.request);
             } else {
                 console.error('Error message:', error.message);
             }
 
             // If we get a 401 or 403, the token is invalid or expired
-            if (error.response && (error.response.status === 401 || error.response.status === 403 || error.response.status === 422)) {
+            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
                 console.log('Removing invalid token from localStorage');
                 localStorage.removeItem('token');
             }

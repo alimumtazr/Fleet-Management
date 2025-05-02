@@ -37,37 +37,37 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        # Handle potential encoding issues
-        if isinstance(plain_password, str):
-            plain_password = plain_password.encode('utf-8')
+        # First try with passlib's built-in verification
         return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
-        print(f"Password verification error: {str(e)}")
+        print(f"Password verification error with passlib: {str(e)}")
         # Fallback to direct bcrypt comparison if passlib fails
         try:
-            return bcrypt.checkpw(
-                plain_password if isinstance(plain_password, bytes) else plain_password.encode('utf-8'),
-                hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
-            )
+            # Ensure proper encoding
+            if isinstance(plain_password, str):
+                plain_password = plain_password.encode('utf-8')
+            
+            if isinstance(hashed_password, str):
+                hashed_password = hashed_password.encode('utf-8')
+            
+            return bcrypt.checkpw(plain_password, hashed_password)
         except Exception as e2:
             print(f"Bcrypt direct verification error: {str(e2)}")
             return False
 
 def get_password_hash(password: str) -> str:
     try:
-        # Handle potential encoding issues
-        if isinstance(password, str):
-            password = password.encode('utf-8')
         return pwd_context.hash(password)
     except Exception as e:
-        print(f"Password hashing error: {str(e)}")
+        print(f"Password hashing error with passlib: {str(e)}")
         # Fallback to direct bcrypt hashing if passlib fails
         try:
+            # Ensure proper encoding
+            if isinstance(password, str):
+                password = password.encode('utf-8')
+                
             salt = bcrypt.gensalt(rounds=12)
-            hashed = bcrypt.hashpw(
-                password if isinstance(password, bytes) else password.encode('utf-8'),
-                salt
-            )
+            hashed = bcrypt.hashpw(password, salt)
             return hashed.decode('utf-8')
         except Exception as e2:
             print(f"Bcrypt direct hashing error: {str(e2)}")
@@ -82,6 +82,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# Import here to avoid circular imports
+from models import User as DBUser
 
 async def get_current_user(
     auth_credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -151,9 +154,6 @@ async def get_current_user(
     except JWTError as e:
         print(f"JWT Error: {str(e)}")
         raise credentials_exception
-
-    # Import here to avoid circular imports
-    from models import User as DBUser
 
     # Get the user from the database
     try:

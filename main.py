@@ -160,13 +160,23 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
         db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
         if db_user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,  # Use 409 for resource conflict
                 detail="Email already registered"
             )
 
         # Create new user with UUID
         user_id = str(uuid.uuid4())
-        hashed_password = get_password_hash(user.password)
+        
+        # Ensure password is hashed properly with improved error handling
+        try:
+            hashed_password = get_password_hash(user.password)
+            print(f"Password hashed successfully, length: {len(hashed_password)}")
+        except Exception as hash_error:
+            print(f"Password hashing error: {str(hash_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error processing password"
+            )
 
         # Fix: Make sure all required fields are provided and match the DB model
         db_user = DBUser(
@@ -184,6 +194,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
             db.add(db_user)
             db.commit()
             db.refresh(db_user)
+            print(f"User registered successfully: {user.email}")
         except Exception as db_error:
             db.rollback()
             print(f"Database error during registration: {str(db_error)}")
@@ -198,6 +209,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
             access_token = create_access_token(
                 data={"sub": user_id}, expires_delta=access_token_expires
             )
+            print(f"Token generated with expiry: {ACCESS_TOKEN_EXPIRE_MINUTES} minutes")
         except Exception as token_error:
             print(f"Token generation error: {str(token_error)}")
             raise HTTPException(
@@ -258,7 +270,12 @@ async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Add extra debugging
+        print(f"Attempting to verify password for user: {db_user.email}")
+        print(f"Password hash in DB: {db_user.password_hash[:20]}...")
+
         if not verify_password(user_login.password, db_user.password_hash):
+            print("Password verification failed")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -271,6 +288,7 @@ async def login_api(user_login: UserLogin, db: Session = Depends(get_db)):
             access_token = create_access_token(
                 data={"sub": str(db_user.id)}, expires_delta=access_token_expires
             )
+            print(f"Token generated with expiry: {ACCESS_TOKEN_EXPIRE_MINUTES} minutes")
         except Exception as token_error:
             print(f"Token generation error during login: {str(token_error)}")
             raise HTTPException(
@@ -320,14 +338,17 @@ async def get_current_user_api(current_user: DBUser = Depends(get_current_active
     This endpoint is used by the frontend to check if the user is logged in.
     """
     try:
-        # Return user information
+        # Return consistent user information format
         return {
-            "id": current_user.id,
-            "email": current_user.email,
-            "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "user_type": str(current_user.user_type.value),
-            "is_active": current_user.is_active
+            "status": "success", 
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "first_name": current_user.first_name,
+                "last_name": current_user.last_name,
+                "user_type": str(current_user.user_type.value),
+                "is_active": current_user.is_active
+            }
         }
     except Exception as e:
         print(f"Error in /api/auth/me endpoint: {str(e)}")

@@ -43,13 +43,17 @@ const ProtectedRoute = ({ children }) => {
                     console.log('User authenticated:', user);
                     setIsAuthenticated(true);
                 } else {
-                    console.log('Failed to get user data, redirecting to login');
+                    console.log('Failed to get user data, clearing token and redirecting to login');
+                    // Clear the token if it's invalid
+                    localStorage.removeItem('token');
                     setIsAuthenticated(false);
                 }
             } catch (error) {
                 console.error('Authentication error:', error);
                 setError(error);
                 setIsAuthenticated(false);
+                // Clear the token on authentication errors
+                localStorage.removeItem('token');
             } finally {
                 setLoading(false);
             }
