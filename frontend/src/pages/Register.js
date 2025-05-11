@@ -182,6 +182,7 @@ const Register = () => {
                             onChange={handleChange}
                         >
                             <MenuItem value="customer">Customer</MenuItem>
+                            <MenuItem value="rider">Rider</MenuItem>
                             <MenuItem value="driver">Driver</MenuItem>
                         </Select>
                     </FormControl>

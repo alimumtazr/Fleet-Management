@@ -2,16 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { createTheme } from '@mui/material/styles';
+import { useDispatch } from 'react-redux';
+import { login } from './store/slices/authSlice';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import RideBooking from './pages/RideBooking';
 import DriverDashboard from './pages/DriverDashboard';
-import CustomerDashboard from './pages/CustomerDashboard'; // Import CustomerDashboard
-import RideHistory from './pages/RideHistory'; // Import placeholder
-import Profile from './pages/Profile'; // Import placeholder
-import Payments from './pages/Payments'; // Import placeholder
+import CustomerDashboard from './pages/CustomerDashboard';
+import RideHistory from './pages/RideHistory';
+import Profile from './pages/Profile';
+import Payments from './pages/Payments';
+import AdminDashboard from './pages/AdminDashboard';
 import authService from './services/authService';
 import { WebSocketProvider } from './context/WebSocketContext';
+import MainLayout from './components/layout/MainLayout';
 
 const theme = createTheme({
     palette: {
@@ -101,13 +105,65 @@ const ProtectedRoute = ({ children }) => {
 
 // Simple placeholder component
 const PlaceholderComponent = ({ title }) => (
-    <div style={{ padding: '20px' }}>
-        <h2>{title}</h2>
-        <p>This page is under construction.</p>
+    <div style={{ 
+        padding: '30px', 
+        maxWidth: '1200px', 
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 3px 10px rgba(0,0,0,0.08)'
+    }}>
+        <h2 style={{ 
+            color: '#1976d2', 
+            marginBottom: '16px',
+            fontWeight: 500
+        }}>{title}</h2>
+        <p style={{ color: '#666', fontSize: '16px' }}>
+            This page is currently under development. Check back soon for new features and functionality.
+        </p>
+        <div style={{ 
+            marginTop: '20px', 
+            padding: '15px', 
+            backgroundColor: '#f5f9ff', 
+            borderLeft: '4px solid #1976d2',
+            borderRadius: '4px'
+        }}>
+            <p style={{ margin: 0, color: '#444' }}>
+                We're constantly improving our Fleet Management System to provide you with the best experience.
+            </p>
+        </div>
     </div>
 );
 
 const App = () => {
+    const dispatch = useDispatch();
+    
+    // On app load, check for saved user state and restore it
+    useEffect(() => {
+        const restoreUserSession = async () => {
+            try {
+                if (authService.isAuthenticated()) {
+                    console.log('[App] Found authentication token, fetching user data...');
+                    const userData = await authService.getCurrentUser();
+                    if (userData && userData.user) {
+                        console.log('[App] Restoring user session:', userData.user);
+                        dispatch(login(userData.user));
+                    } else {
+                        console.log('[App] No valid user data found, clearing token');
+                        authService.logout();
+                    }
+                } else {
+                    console.log('[App] No authentication token found');
+                }
+            } catch (error) {
+                console.error('[App] Error restoring user session:', error);
+                authService.logout();
+            }
+        };
+        
+        restoreUserSession();
+    }, [dispatch]);
+    
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
@@ -120,51 +176,63 @@ const App = () => {
                         {/* Customer Routes */}
                         <Route
                             path="/"
-                            element={<ProtectedRoute><RideBooking /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><RideBooking /></MainLayout></ProtectedRoute>}
                         />
                         <Route
                             path="/customer-dashboard"
-                            element={<ProtectedRoute><CustomerDashboard /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><CustomerDashboard /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
                             path="/ride-history"
-                            element={<ProtectedRoute><RideHistory /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><RideHistory /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
                             path="/profile"
-                            element={<ProtectedRoute><Profile /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><Profile /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
                             path="/payments"
-                            element={<ProtectedRoute><Payments /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><Payments /></MainLayout></ProtectedRoute>}
                         />
 
                         {/* Driver Routes */}
                         <Route
                             path="/driver-dashboard"
-                            element={<ProtectedRoute><DriverDashboard /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><DriverDashboard /></MainLayout></ProtectedRoute>}
                         />
-                        {/* Add placeholder routes for driver dashboard links */}
                         <Route 
                             path="/current-ride"
-                            element={<ProtectedRoute><PlaceholderComponent title="Current Ride Details" /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="Current Ride Details" /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
                             path="/driver-earnings"
-                            element={<ProtectedRoute><PlaceholderComponent title="Driver Earnings" /></ProtectedRoute>}
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="Driver Earnings" /></MainLayout></ProtectedRoute>}
+                        />
+                        
+                        {/* Admin Routes */}
+                        <Route
+                            path="/admin-dashboard"
+                            element={<ProtectedRoute><MainLayout><AdminDashboard /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
-                            path="/driver-schedule"
-                            element={<ProtectedRoute><PlaceholderComponent title="Driver Schedule" /></ProtectedRoute>}
+                            path="/drivers"
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="Manage Drivers" /></MainLayout></ProtectedRoute>}
                         />
                         <Route 
-                            path="/driver-ratings"
-                            element={<ProtectedRoute><PlaceholderComponent title="Driver Ratings" /></ProtectedRoute>}
+                            path="/customers"
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="Manage Customers" /></MainLayout></ProtectedRoute>}
+                        />
+                        <Route 
+                            path="/rides"
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="Manage Rides" /></MainLayout></ProtectedRoute>}
+                        />
+                        <Route 
+                            path="/settings"
+                            element={<ProtectedRoute><MainLayout><PlaceholderComponent title="System Settings" /></MainLayout></ProtectedRoute>}
                         />
 
-                        {/* Fallback for unknown routes - maybe redirect to dashboard or 404 */}
+                        {/* Fallback for unknown routes - redirect to dashboard */}
                         <Route path="*" element={<Navigate to="/" replace />} />
-
                     </Routes>
                 </Router>
             </WebSocketProvider>

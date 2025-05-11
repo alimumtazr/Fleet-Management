@@ -27,6 +27,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PersonIcon from '@mui/icons-material/Person';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import TabNavigation from './TabNavigation';
 
 const MainLayout = ({ children }) => {
   const theme = useTheme();
@@ -36,6 +37,9 @@ const MainLayout = ({ children }) => {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const [anchorEl, setAnchorEl] = React.useState(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  console.log('MainLayout - User:', user);
+  console.log('MainLayout - isAuthenticated:', isAuthenticated);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -84,7 +88,11 @@ const MainLayout = ({ children }) => {
   ];
 
   const filteredMenuItems = menuItems.filter(
-    (item) => item.roles.includes(user?.role)
+    (item) => {
+      console.log('Item roles:', item.roles);
+      console.log('User type:', user?.user_type);
+      return item.roles.includes(user?.user_type || 'customer');
+    }
   );
 
   const canGoBack = location.pathname !== '/dashboard' &&
@@ -136,7 +144,7 @@ const MainLayout = ({ children }) => {
           {isAuthenticated && (
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography variant="body1" sx={{ mr: 2 }}>
-                Welcome, {user?.name}
+                Welcome, {user?.first_name || 'User'}
               </Typography>
               <IconButton
                 onClick={handleMenu}
@@ -149,7 +157,7 @@ const MainLayout = ({ children }) => {
                 }}
               >
                 <Avatar
-                  alt={user?.name}
+                  alt={user?.first_name}
                   src="/static/images/avatar/1.jpg"
                   sx={{ width: 32, height: 32 }}
                 />
@@ -175,6 +183,18 @@ const MainLayout = ({ children }) => {
           )}
         </Toolbar>
       </AppBar>
+      {isAuthenticated ? (
+        <>
+          <Typography sx={{ mt: 8, ml: 2, display: 'none' }}>
+            Debug - User: {JSON.stringify(user)}
+          </Typography>
+          <TabNavigation />
+        </>
+      ) : (
+        <Typography sx={{ mt: 8, ml: 2, display: 'none' }}>
+          Not authenticated
+        </Typography>
+      )}
       <Drawer
         variant="persistent"
         anchor="left"
@@ -223,7 +243,7 @@ const MainLayout = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          pt: 10,
+          pt: 13,
           pb: 4,
           px: 3,
           marginLeft: drawerOpen ? '240px' : 0,

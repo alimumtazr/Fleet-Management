@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { login as loginAction } from '../store/slices/authSlice';
 import {
     Container,
     Paper,
@@ -24,6 +26,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 const Login = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const dispatch = useDispatch();
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -80,21 +83,28 @@ const Login = () => {
             console.log("Login successful:", loginResponse);
 
             // Ensure user data is present in the response
-            if (loginResponse && loginResponse.user && loginResponse.user.user_type) {
+            if (loginResponse && loginResponse.user) {
+                console.log("User data:", loginResponse.user);
+                
+                // Dispatch user data to Redux store
+                dispatch(loginAction(loginResponse.user));
+                
                 const userType = loginResponse.user.user_type;
                 console.log("User type:", userType);
 
                 // Navigate based on user type
                 if (userType === 'driver') {
                     navigate('/driver-dashboard');
-                } else if (userType === 'customer') { // Check for 'customer'
-                    navigate('/customer-dashboard'); // Redirect to customer dashboard
+                } else if (userType === 'admin') {
+                    navigate('/admin-dashboard');
+                } else if (userType === 'customer') { 
+                    navigate('/customer-dashboard');
                 } else {
-                    // Default redirect if type is unknown or not customer/driver
+                    // Default redirect if type is unknown
                     navigate('/'); 
                 }
             } else {
-                console.error('User data or user_type missing in login response');
+                console.error('User data missing in login response');
                 setError('Login succeeded but user data is incomplete. Please contact support.');
                 // Default redirect or stay on login?
                 navigate('/'); 
